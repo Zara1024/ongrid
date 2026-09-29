@@ -161,25 +161,27 @@ func formatFeishuCard(msg Message) map[string]any {
 	colorTemplate := "grey"
 	prefix := "🔔【系统通知】"
 
-	isResolved := false
-	if status, ok := msg.Labels["status"]; ok && strings.EqualFold(status, "resolved") {
-		isResolved = true
-	} else if strings.Contains(strings.ToLower(msg.Subject), "resolved") {
-		isResolved = true
-	}
+	statusLower := strings.ToLower(strings.TrimSpace(msg.Labels["status"]))
+	isResolved := statusLower == "resolved" || strings.Contains(strings.ToLower(msg.Subject), "resolved")
 
 	if isResolved {
 		colorTemplate = "green"
 		prefix = "✅【告警恢复】"
+	} else if statusLower == "acknowledged" || statusLower == "ack" {
+		colorTemplate = "yellow"
+		prefix = "🟡【告警认领】"
+	} else if statusLower == "silenced" {
+		colorTemplate = "grey"
+		prefix = "⚪【告警静音】"
 	} else {
-		switch msg.Severity {
-		case SeverityCritical:
+		switch strings.ToLower(strings.TrimSpace(string(msg.Severity))) {
+		case "critical", "fatal", "emergency", "high", "p0", "p1":
 			colorTemplate = "red"
 			prefix = "🚨【严重告警】"
-		case SeverityWarning:
+		case "warning", "warn", "medium", "p2":
 			colorTemplate = "orange"
 			prefix = "⚠️【预警提示】"
-		case SeverityInfo:
+		case "info", "notice", "low", "p3":
 			colorTemplate = "blue"
 			prefix = "ℹ️【通知提醒】"
 		default:
@@ -225,23 +227,38 @@ func formatFeishuCard(msg Message) map[string]any {
 		})
 	}
 
-	// 1. 告警级别
-	if isResolved {
-		addField("告警状态", "<font color='green'>RESOLVED (已恢复)</font>")
-	} else {
-		switch msg.Severity {
-		case SeverityCritical:
-			addField("告警级别", "<font color='red'>CRITICAL (严重)</font>")
-		case SeverityWarning:
-			addField("告警级别", "<font color='orange'>WARNING (警告)</font>")
-		case SeverityInfo:
-			addField("告警级别", "<font color='blue'>INFO (信息)</font>")
-		default:
-			addField("告警级别", strings.ToUpper(string(msg.Severity)))
+	// 1. 告警级别 (适配所有告警级别)
+	sevStr := strings.ToLower(strings.TrimSpace(string(msg.Severity)))
+	switch sevStr {
+	case "critical", "fatal", "emergency", "high", "p0", "p1":
+		addField("告警级别", "<font color='red'>CRITICAL (严重)</font>")
+	case "warning", "warn", "medium", "p2":
+		addField("告警级别", "<font color='orange'>WARNING (警告)</font>")
+	case "info", "notice", "low", "p3":
+		addField("告警级别", "<font color='blue'>INFO (信息)</font>")
+	default:
+		if sevStr != "" {
+			addField("告警级别", strings.ToUpper(sevStr))
 		}
 	}
 
-	// 2. 告警对象
+	// 2. 告警状态 (生命周期状态跟踪)
+	if isResolved {
+		addField("告警状态", "<font color='green'>RESOLVED (已恢复)</font>")
+	} else if statusLower != "" {
+		switch statusLower {
+		case "firing":
+			addField("告警状态", "<font color='red'>FIRING (发生中)</font>")
+		case "acknowledged", "ack":
+			addField("告警状态", "<font color='orange'>ACKNOWLEDGED (已认领)</font>")
+		case "silenced":
+			addField("告警状态", "<font color='grey'>SILENCED (已静音)</font>")
+		default:
+			addField("告警状态", strings.ToUpper(statusLower))
+		}
+	}
+
+	// 3. 告警对象
 	if dn, ok := msg.Labels["device_name"]; ok && dn != "" {
 		if did, ok2 := msg.Labels["device_id"]; ok2 && did != "" {
 			addField("告警对象", fmt.Sprintf("%s (ID: %s)", dn, did))
@@ -254,7 +271,7 @@ func formatFeishuCard(msg Message) map[string]any {
 		addField("告警服务", svc)
 	}
 
-	// 3. 规则名称
+	// 4. 规则名称
 	if rn, ok := msg.Labels["rule_name"]; ok && rn != "" {
 		if rk, ok2 := msg.Labels["rule"]; ok2 && rk != "" && rk != rn {
 			addField("规则名称", fmt.Sprintf("%s (`%s`)", rn, rk))
@@ -265,12 +282,20 @@ func formatFeishuCard(msg Message) map[string]any {
 		addField("规则名称", fmt.Sprintf("`%s`", rk))
 	}
 
-	// 4. 触发时间
+	// 5. 触发时间 (自动转为北京时间 CST / UTC+8，消除 Linux / Docker 容器默认 UTC 导致的 8 小时偏差)
 	occurredAt := msg.OccurredAt
 	if occurredAt.IsZero() {
 		occurredAt = time.Now()
 	}
-	addField("发生时间", occurredAt.Local().Format("2006-01-02 15:04:05"))
+	loc := time.FixedZone("CST", 8*3600)
+	if tzName, ok := msg.Labels["timezone"]; ok && tzName != "" {
+		if l, err := time.LoadLocation(tzName); err == nil {
+			loc = l
+		}
+	} else if l, err := time.LoadLocation("Asia/Shanghai"); err == nil {
+		loc = l
+	}
+	addField("发生时间", occurredAt.In(loc).Format("2006-01-02 15:04:05"))
 
 	if len(fields) > 0 {
 		elements = append(elements, map[string]any{

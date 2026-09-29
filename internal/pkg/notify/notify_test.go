@@ -158,21 +158,52 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 		t.Errorf("expected action element in card elements, got %v", elements)
 	}
 
-	// Verify resolved card turns green
-	err = sender.Send(context.Background(), Message{
-		Subject:  "设备已恢复正常",
-		Severity: SeverityInfo,
-		Labels: map[string]string{
-			"status": "resolved",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Send resolved: %v", err)
+	// Verify timezone is converted to Beijing time (+8 hours from UTC)
+	// occurred is 2026-09-29 03:30:00 UTC => 2026-09-29 11:30:00 CST
+	fieldsElem := elements[0].(map[string]any)["fields"].([]map[string]any)
+	foundTime := false
+	for _, f := range fieldsElem {
+		textMap := f["text"].(map[string]any)
+		content := textMap["content"].(string)
+		if strings.Contains(content, "发生时间") {
+			foundTime = true
+			if !strings.Contains(content, "2026-09-29 11:30:00") {
+				t.Errorf("expected occurredAt in CST '2026-09-29 11:30:00', got %s", content)
+			}
+		}
 	}
-	cardResolved := got["card"].(map[string]any)
-	headerResolved := cardResolved["header"].(map[string]any)
-	if headerResolved["template"] != "green" {
-		t.Errorf("resolved header template = %v, want green", headerResolved["template"])
+	if !foundTime {
+		t.Errorf("time field not found in card")
+	}
+
+	// Verify all severities & status mappings
+	severityCases := []struct {
+		severity notify.Severity
+		status   string
+		wantTpl  string
+	}{
+		{SeverityWarning, "firing", "orange"},
+		{SeverityInfo, "firing", "blue"},
+		{SeverityCritical, "acknowledged", "yellow"},
+		{SeverityCritical, "resolved", "green"},
+	}
+
+	for _, sc := range severityCases {
+		err = sender.Send(context.Background(), Message{
+			Subject:  "状态测试",
+			Severity: sc.severity,
+			Labels: map[string]string{
+				"status": sc.status,
+			},
+		})
+		if err != nil {
+			t.Fatalf("Send severity %v status %v: %v", sc.severity, sc.status, err)
+		}
+		c := got["card"].(map[string]any)
+		h := c["header"].(map[string]any)
+		if h["template"] != sc.wantTpl {
+			t.Errorf("severity=%s status=%s got template %v, want %v", sc.severity, sc.status, h["template"], sc.wantTpl)
+		}
 	}
 }
 
