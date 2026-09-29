@@ -159,7 +159,7 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 	}
 
 	// Verify timezone is converted to Beijing time (+8 hours from UTC)
-	// occurred is 2026-09-29 03:30:00 UTC => 2026-09-29 11:30:00 CST
+	// occurred is 2026-09-29 10:00:00 UTC => 2026-09-29 18:00:00 CST
 	fieldsElem := elements[0].(map[string]any)["fields"].([]any)
 	foundTime := false
 	for _, f := range fieldsElem {
@@ -168,8 +168,8 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 		content := textMap["content"].(string)
 		if strings.Contains(content, "发生时间") {
 			foundTime = true
-			if !strings.Contains(content, "2026-09-29 11:30:00") {
-				t.Errorf("expected occurredAt in CST '2026-09-29 11:30:00', got %s", content)
+			if !strings.Contains(content, "2026-09-29 18:00:00") {
+				t.Errorf("expected occurredAt in CST '2026-09-29 18:00:00', got %s", content)
 			}
 		}
 	}
