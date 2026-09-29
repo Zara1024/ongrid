@@ -310,36 +310,34 @@ func formatFeishuCard(msg Message) map[string]any {
 		})
 	}
 
-	// 7. 操作按钮 (Actions)
-	actions := make([]map[string]any, 0, 2)
-	baseURL := "http://43.163.118.26:8080"
-	if u, ok := msg.Labels["console_url"]; ok && u != "" {
-		baseURL = u
-	}
+	// 7. 操作按钮 (Actions) - 仅在提供控制台根路径时生成跳转按钮，避免硬编码地址
+	baseURL := strings.TrimRight(strings.TrimSpace(msg.Labels["console_url"]), "/")
+	if baseURL != "" {
+		actions := make([]map[string]any, 0, 2)
+		if did, ok := msg.Labels["device_id"]; ok && did != "" {
+			actions = append(actions, map[string]any{
+				"tag":  "button",
+				"text": map[string]any{"tag": "plain_text", "content": "🔍 查看设备详情"},
+				"type": "primary",
+				"url":  fmt.Sprintf("%s/devices/%s", baseURL, did),
+			})
+		}
+		if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
+			actions = append(actions, map[string]any{
+				"tag":  "button",
+				"text": map[string]any{"tag": "plain_text", "content": "📋 告警事件"},
+				"type": "default",
+				"url":  fmt.Sprintf("%s/alerts", baseURL),
+			})
+		}
 
-	if did, ok := msg.Labels["device_id"]; ok && did != "" {
-		actions = append(actions, map[string]any{
-			"tag":  "button",
-			"text": map[string]any{"tag": "plain_text", "content": "🔍 查看设备详情"},
-			"type": "primary",
-			"url":  fmt.Sprintf("%s/devices/%s", baseURL, did),
-		})
-	}
-	if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
-		actions = append(actions, map[string]any{
-			"tag":  "button",
-			"text": map[string]any{"tag": "plain_text", "content": "📋 告警事件"},
-			"type": "default",
-			"url":  fmt.Sprintf("%s/alerts", baseURL),
-		})
-	}
-
-	if len(actions) > 0 {
-		elements = append(elements, map[string]any{"tag": "hr"})
-		elements = append(elements, map[string]any{
-			"tag":     "action",
-			"actions": actions,
-		})
+		if len(actions) > 0 {
+			elements = append(elements, map[string]any{"tag": "hr"})
+			elements = append(elements, map[string]any{
+				"tag":     "action",
+				"actions": actions,
+			})
+		}
 	}
 
 	// 8. 备注 (Note)

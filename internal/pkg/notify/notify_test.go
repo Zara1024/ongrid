@@ -120,6 +120,7 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 			"device_name": "阿里云ECS01",
 			"incident_id": "88",
 			"runbook_url": "https://wiki.ops/runbook/device_offline",
+			"console_url": "https://ongrid.example.com",
 		},
 	})
 	if err != nil {
@@ -143,6 +144,18 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 	elements, ok := card["elements"].([]any)
 	if !ok || len(elements) == 0 {
 		t.Fatalf("elements missing or empty")
+	}
+
+	// Verify action buttons are rendered when console_url is provided
+	hasActions := false
+	for _, el := range elements {
+		if elm, ok := el.(map[string]any); ok && elm["tag"] == "action" {
+			hasActions = true
+			break
+		}
+	}
+	if !hasActions {
+		t.Errorf("expected action element in card elements, got %v", elements)
 	}
 
 	// Verify resolved card turns green
