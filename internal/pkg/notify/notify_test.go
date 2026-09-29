@@ -327,3 +327,106 @@ func TestSlackSenderColorByUnknownSeverity(t *testing.T) {
 		}
 	}
 }
+
+func TestDingTalkSenderActionCard(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	sender := NewDingTalkSender("dingtalk", srv.URL, "secret", srv.Client())
+	occurred := time.Date(2026, 5, 30, 10, 0, 0, 0, time.UTC)
+	err := sender.Send(context.Background(), Message{
+		Subject:    "edge-node-01 离线",
+		Severity:   SeverityCritical,
+		OccurredAt: occurred,
+		Body:       "Device edge-node-01 has been disconnected for more than 5 minutes",
+		Source:     "alert-pipeline",
+		Labels: map[string]string{
+			"rule_name":   "主机离线告警",
+			"device_name": "edge-node-01",
+			"device_id":   "42",
+			"incident_id": "101",
+			"console_url": "https://ongrid.example.com",
+			"runbook_url": "https://ongrid.example.com/wiki/runbook",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	if got["msgtype"] != "actionCard" {
+		t.Fatalf("expected msgtype=actionCard, got %v", got["msgtype"])
+	}
+
+	card, ok := got["actionCard"].(map[string]any)
+	if !ok {
+		t.Fatalf("actionCard is not a map: %v", got["actionCard"])
+	}
+
+	title, _ := card["title"].(string)
+	if !strings.Contains(title, "🚨【严重告警】主机离线告警 - edge-node-01") {
+		t.Errorf("expected title to contain 🚨【严重告警】主机离线告警 - edge-node-01, got %q", title)
+	}
+
+	text, _ := card["text"].(string)
+	if !strings.Contains(text, "2026-05-30 18:00:00") {
+		t.Errorf("expected text to contain CST time 2026-05-30 18:00:00, got %q", text)
+	}
+	if !strings.Contains(text, "CRITICAL (严重)") {
+		t.Errorf("expected text to contain CRITICAL (严重), got %q", text)
+	}
+
+	btns, ok := card["btns"].([]any)
+	if !ok || len(btns) != 3 {
+		t.Fatalf("expected 3 buttons, got %v", card["btns"])
+	}
+}
+
+func TestDingTalkSenderMarkdownFallback(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	sender := NewDingTalkSender("dingtalk", srv.URL, "secret", srv.Client())
+	err := sender.Send(context.Background(), Message{
+		Subject:  "设备恢复正常",
+		Severity: SeverityInfo,
+		Labels: map[string]string{
+			"status":    "resolved",
+			"rule_name": "主机离线告警",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	if got["msgtype"] != "markdown" {
+		t.Fatalf("expected msgtype=markdown when no action buttons, got %v", got["msgtype"])
+	}
+
+	md, ok := got["markdown"].(map[string]any)
+	if !ok {
+		t.Fatalf("markdown is not a map: %v", got["markdown"])
+	}
+
+	title, _ := md["title"].(string)
+	if !strings.Contains(title, "✅【告警恢复】主机离线告警") {
+		t.Errorf("expected resolved title, got %q", title)
+	}
+
+	text, _ := md["text"].(string)
+	if !strings.Contains(text, "RESOLVED (已恢复)") {
+		t.Errorf("expected text to contain RESOLVED (已恢复), got %q", text)
+	}
+}
+
