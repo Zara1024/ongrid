@@ -178,7 +178,7 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 
 	// Verify all severities & status mappings
 	severityCases := []struct {
-		severity notify.Severity
+		severity Severity
 		status   string
 		wantTpl  string
 	}{
