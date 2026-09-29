@@ -78,8 +78,11 @@ func TestFeishuSenderSignsPayload(t *testing.T) {
 		if payload["sign"] == "" {
 			t.Errorf("sign missing")
 		}
-		if payload["msg_type"] != "text" {
-			t.Errorf("msg_type = %v", payload["msg_type"])
+		if payload["msg_type"] != "interactive" {
+			t.Errorf("msg_type = %v, want interactive", payload["msg_type"])
+		}
+		if payload["card"] == nil {
+			t.Errorf("card missing in payload")
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -91,6 +94,75 @@ func TestFeishuSenderSignsPayload(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 }
+
+func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	sender := NewFeishuSender("feishu-ops", srv.URL, "", srv.Client())
+	occurred := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	err := sender.Send(context.Background(), Message{
+		Subject:    "设备离线: 阿里云ECS01 心跳超时",
+		Severity:   SeverityCritical,
+		Source:     "global",
+		DedupeKey:  "pipeline:device_offline:1",
+		OccurredAt: occurred,
+		Labels: map[string]string{
+			"rule":        "device_offline",
+			"rule_name":   "设备离线",
+			"device_id":   "1",
+			"device_name": "阿里云ECS01",
+			"incident_id": "88",
+			"runbook_url": "https://wiki.ops/runbook/device_offline",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	if got["msg_type"] != "interactive" {
+		t.Fatalf("msg_type = %v, want interactive", got["msg_type"])
+	}
+
+	card, ok := got["card"].(map[string]any)
+	if !ok {
+		t.Fatalf("card not a map: %v", got["card"])
+	}
+
+	header, ok := card["header"].(map[string]any)
+	if !ok || header["template"] != "red" {
+		t.Errorf("header template = %v, want red", header["template"])
+	}
+
+	elements, ok := card["elements"].([]any)
+	if !ok || len(elements) == 0 {
+		t.Fatalf("elements missing or empty")
+	}
+
+	// Verify resolved card turns green
+	err = sender.Send(context.Background(), Message{
+		Subject:  "设备已恢复正常",
+		Severity: SeverityInfo,
+		Labels: map[string]string{
+			"status": "resolved",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send resolved: %v", err)
+	}
+	cardResolved := got["card"].(map[string]any)
+	headerResolved := cardResolved["header"].(map[string]any)
+	if headerResolved["template"] != "green" {
+		t.Errorf("resolved header template = %v, want green", headerResolved["template"])
+	}
+}
+
 
 func TestDingTalkSenderSignsURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

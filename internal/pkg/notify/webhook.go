@@ -138,12 +138,12 @@ func nonEmpty(v, fallback string) string {
 	return fallback
 }
 
-// NewFeishuSender posts a text payload compatible with Feishu/Lark custom bots.
+// NewFeishuSender posts an interactive card payload compatible with Feishu/Lark custom bots.
 func NewFeishuSender(name, endpoint, secret string, client *http.Client) Sender {
 	return newWebhookSender(name, endpoint, secret, client, func(msg Message) (any, error) {
 		payload := map[string]any{
-			"msg_type": "text",
-			"content":  map[string]string{"text": formatText(msg)},
+			"msg_type": "interactive",
+			"card":     formatFeishuCard(msg),
 		}
 		if secret != "" {
 			ts := fmt.Sprintf("%d", time.Now().Unix())
@@ -153,6 +153,219 @@ func NewFeishuSender(name, endpoint, secret string, client *http.Client) Sender 
 		return payload, nil
 	}, nil)
 }
+
+// formatFeishuCard renders a Message as a Feishu interactive message card (Card 2.0).
+// It maps severity onto card header colors (red for critical, orange for warning,
+// green for resolved/info) and formats structured Chinese fields and action buttons.
+func formatFeishuCard(msg Message) map[string]any {
+	colorTemplate := "grey"
+	prefix := "🔔【系统通知】"
+
+	isResolved := false
+	if status, ok := msg.Labels["status"]; ok && strings.EqualFold(status, "resolved") {
+		isResolved = true
+	} else if strings.Contains(strings.ToLower(msg.Subject), "resolved") {
+		isResolved = true
+	}
+
+	if isResolved {
+		colorTemplate = "green"
+		prefix = "✅【告警恢复】"
+	} else {
+		switch msg.Severity {
+		case SeverityCritical:
+			colorTemplate = "red"
+			prefix = "🚨【严重告警】"
+		case SeverityWarning:
+			colorTemplate = "orange"
+			prefix = "⚠️【预警提示】"
+		case SeverityInfo:
+			colorTemplate = "blue"
+			prefix = "ℹ️【通知提醒】"
+		default:
+			colorTemplate = "grey"
+			prefix = "🔔【系统通知】"
+		}
+	}
+
+	ruleTitle := msg.Subject
+	if rn, ok := msg.Labels["rule_name"]; ok && rn != "" {
+		if dn, ok2 := msg.Labels["device_name"]; ok2 && dn != "" {
+			ruleTitle = fmt.Sprintf("%s - %s", rn, dn)
+		} else {
+			ruleTitle = rn
+		}
+	}
+	if ruleTitle == "" {
+		ruleTitle = "告警事件通知"
+	}
+
+	header := map[string]any{
+		"template": colorTemplate,
+		"title": map[string]any{
+			"tag":     "plain_text",
+			"content": prefix + ruleTitle,
+		},
+	}
+
+	elements := make([]any, 0, 6)
+
+	// Fields grid (2 columns)
+	fields := make([]map[string]any, 0, 6)
+	addField := func(title, val string) {
+		if val == "" {
+			return
+		}
+		fields = append(fields, map[string]any{
+			"is_short": true,
+			"text": map[string]any{
+				"tag":     "lark_md",
+				"content": fmt.Sprintf("**%s**：\n%s", title, val),
+			},
+		})
+	}
+
+	// 1. 告警级别
+	if isResolved {
+		addField("告警状态", "<font color='green'>RESOLVED (已恢复)</font>")
+	} else {
+		switch msg.Severity {
+		case SeverityCritical:
+			addField("告警级别", "<font color='red'>CRITICAL (严重)</font>")
+		case SeverityWarning:
+			addField("告警级别", "<font color='orange'>WARNING (警告)</font>")
+		case SeverityInfo:
+			addField("告警级别", "<font color='blue'>INFO (信息)</font>")
+		default:
+			addField("告警级别", strings.ToUpper(string(msg.Severity)))
+		}
+	}
+
+	// 2. 告警对象
+	if dn, ok := msg.Labels["device_name"]; ok && dn != "" {
+		if did, ok2 := msg.Labels["device_id"]; ok2 && did != "" {
+			addField("告警对象", fmt.Sprintf("%s (ID: %s)", dn, did))
+		} else {
+			addField("告警对象", dn)
+		}
+	} else if did, ok := msg.Labels["device_id"]; ok && did != "" {
+		addField("告警对象", "设备 #"+did)
+	} else if svc, ok := msg.Labels["service"]; ok && svc != "" {
+		addField("告警服务", svc)
+	}
+
+	// 3. 规则名称
+	if rn, ok := msg.Labels["rule_name"]; ok && rn != "" {
+		if rk, ok2 := msg.Labels["rule"]; ok2 && rk != "" && rk != rn {
+			addField("规则名称", fmt.Sprintf("%s (`%s`)", rn, rk))
+		} else {
+			addField("规则名称", rn)
+		}
+	} else if rk, ok := msg.Labels["rule"]; ok && rk != "" {
+		addField("规则名称", fmt.Sprintf("`%s`", rk))
+	}
+
+	// 4. 触发时间
+	occurredAt := msg.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = time.Now()
+	}
+	addField("发生时间", occurredAt.Local().Format("2006-01-02 15:04:05"))
+
+	if len(fields) > 0 {
+		elements = append(elements, map[string]any{
+			"tag":    "div",
+			"fields": fields,
+		})
+	}
+
+	// 5. 详细描述 / 触发条件
+	descContent := ""
+	if msg.Body != "" {
+		descContent = msg.Body
+	} else if expr, ok := msg.Labels["rule_expr"]; ok && expr != "" {
+		descContent = fmt.Sprintf("**触发条件**：`%s`\n%s", expr, msg.Subject)
+	} else if msg.Subject != "" && msg.Subject != ruleTitle {
+		descContent = fmt.Sprintf("**详情**：%s", msg.Subject)
+	}
+
+	if descContent != "" {
+		elements = append(elements, map[string]any{
+			"tag": "div",
+			"text": map[string]any{
+				"tag":     "lark_md",
+				"content": descContent,
+			},
+		})
+	}
+
+	// 6. 排查建议 (Runbook)
+	if rb, ok := msg.Labels["runbook_url"]; ok && rb != "" {
+		elements = append(elements, map[string]any{
+			"tag": "div",
+			"text": map[string]any{
+				"tag":     "lark_md",
+				"content": fmt.Sprintf("📖 **运维手册**：[点击查看处理指引](%s)", rb),
+			},
+		})
+	}
+
+	// 7. 操作按钮 (Actions)
+	actions := make([]map[string]any, 0, 2)
+	baseURL := "http://43.163.118.26:8080"
+	if u, ok := msg.Labels["console_url"]; ok && u != "" {
+		baseURL = u
+	}
+
+	if did, ok := msg.Labels["device_id"]; ok && did != "" {
+		actions = append(actions, map[string]any{
+			"tag":  "button",
+			"text": map[string]any{"tag": "plain_text", "content": "🔍 查看设备详情"},
+			"type": "primary",
+			"url":  fmt.Sprintf("%s/devices/%s", baseURL, did),
+		})
+	}
+	if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
+		actions = append(actions, map[string]any{
+			"tag":  "button",
+			"text": map[string]any{"tag": "plain_text", "content": "📋 告警事件"},
+			"type": "default",
+			"url":  fmt.Sprintf("%s/alerts", baseURL),
+		})
+	}
+
+	if len(actions) > 0 {
+		elements = append(elements, map[string]any{"tag": "hr"})
+		elements = append(elements, map[string]any{
+			"tag":     "action",
+			"actions": actions,
+		})
+	}
+
+	// 8. 备注 (Note)
+	source := msg.Source
+	if source == "" {
+		source = "global"
+	}
+	elements = append(elements, map[string]any{
+		"tag": "note",
+		"elements": []any{
+			map[string]any{
+				"tag":     "plain_text",
+				"content": fmt.Sprintf("推送来源：Ongrid AIOps 智能运维平台 | 来源: %s", source),
+			},
+		},
+	})
+
+	return map[string]any{
+		"config": map[string]any{
+			"wide_screen_mode": true,
+		},
+		"header":   header,
+		"elements": elements,
+	}
+}
+
 
 // NewDingTalkSender posts a text payload compatible with DingTalk custom bots.
 func NewDingTalkSender(name, endpoint, secret string, client *http.Client) Sender {

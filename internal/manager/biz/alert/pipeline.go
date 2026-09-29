@@ -423,16 +423,21 @@ func (e *PipelineEvaluator) notify(ctx context.Context, res *FiringResult, summa
 		OccurredAt: at,
 		Labels: map[string]string{
 			"rule":        res.Incident.Rule,
+			"rule_name":   res.Incident.RuleName,
+			"status":      res.Incident.Status,
 			"incident_id": fmt.Sprintf("%d", res.Incident.ID),
 		},
+	}
+	if res.Incident.RunbookURL != "" {
+		msg.Labels["runbook_url"] = res.Incident.RunbookURL
 	}
 	// Preserve application identity for notification routing and correlation.
 	// Control labels such as incident_id/rule still come from the incident.
 	if labels, err := res.Incident.Labels(); err != nil {
 		e.log.Warn("alert: decode notification identity failed", slog.Uint64("incident_id", res.Incident.ID), slog.Any("err", err))
 	} else {
-		for _, key := range []string{"service", "service_namespace", "deployment_environment_name", "service_instance_id", "span_name"} {
-			if value, ok := labels[key]; ok {
+		for _, key := range []string{"service", "service_namespace", "deployment_environment_name", "service_instance_id", "span_name", "rule_name", "rule_expr"} {
+			if value, ok := labels[key]; ok && msg.Labels[key] == "" {
 				msg.Labels[key] = value
 			}
 		}
@@ -446,6 +451,7 @@ func (e *PipelineEvaluator) notify(ctx context.Context, res *FiringResult, summa
 				e.log.Warn("alert: resolve device identity for notification failed",
 					slog.Uint64("device_id", deviceID), slog.Any("err", err))
 			} else if display := deviceDisplay(identity); display != "" {
+				msg.Labels["device_name"] = display
 				msg.Subject = strings.ReplaceAll(msg.Subject,
 					fmt.Sprintf("device_id=%d", deviceID), "device="+display)
 				if identity.Hostname != "" {
