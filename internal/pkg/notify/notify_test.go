@@ -184,6 +184,7 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 		wantTpl  string
 	}{
 		{SeverityWarning, "firing", "orange"},
+		{SeverityWarning, "open", "orange"},
 		{SeverityInfo, "firing", "blue"},
 		{SeverityCritical, "acknowledged", "yellow"},
 		{SeverityCritical, "resolved", "green"},
@@ -208,6 +209,56 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 	}
 }
 
+func TestFeishuCardIgnoresResolvedSubstringInSubject(t *testing.T) {
+	card := formatFeishuCard(Message{
+		Subject:  "unresolved errors above threshold on systemd-resolved",
+		Severity: SeverityCritical,
+		Labels: map[string]string{
+			"status":      "open",
+			"incident_id": "42",
+			"console_url": "https://console.example",
+			"device_id":   "7",
+		},
+	})
+
+	header, ok := card["header"].(map[string]any)
+	if !ok {
+		t.Fatalf("header missing: %#v", card["header"])
+	}
+	if header["template"] != "red" {
+		t.Fatalf("template = %v, want red (open critical must not be treated as recovery)", header["template"])
+	}
+
+	raw, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("marshal card: %v", err)
+	}
+	payload := string(raw)
+	if !strings.Contains(payload, "OPEN (发生中)") {
+		t.Errorf("expected OPEN status localization in card, got %s", payload)
+	}
+	if strings.Contains(payload, "RESOLVED (已恢复)") {
+		t.Errorf("status must not be marked resolved when Labels[status]=open: %s", payload)
+	}
+	if !strings.Contains(payload, "#42") || !strings.Contains(payload, "事件 ID") {
+		t.Errorf("expected visible incident ID #42 in card: %s", payload)
+	}
+	if !strings.Contains(payload, "https://console.example/alerts/incidents/42") {
+		t.Errorf("expected incident deep link /alerts/incidents/42 in card: %s", payload)
+	}
+}
+
+func TestFeishuCardResolvedOnlyFromStatusLabel(t *testing.T) {
+	card := formatFeishuCard(Message{
+		Subject:  "CPU high",
+		Severity: SeverityCritical,
+		Labels:   map[string]string{"status": "resolved"},
+	})
+	header := card["header"].(map[string]any)
+	if header["template"] != "green" {
+		t.Fatalf("resolved status template = %v, want green", header["template"])
+	}
+}
 
 func TestDingTalkSenderSignsURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
