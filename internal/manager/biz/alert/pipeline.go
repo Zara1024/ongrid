@@ -91,6 +91,10 @@ type PipelineEvaluatorOpts struct {
 
 	DeviceIdentityResolver DeviceIdentityResolver
 
+	// ConsoleURL is the public console base used for notification card deep links
+	// (devices / incidents). Empty disables action buttons.
+	ConsoleURL string
+
 	Log *slog.Logger
 	Now func() time.Time
 }
@@ -117,6 +121,7 @@ type PipelineEvaluator struct {
 	logq           LogQuerier
 	logSearcher    logquery.Searcher
 	deviceIdentity DeviceIdentityResolver
+	consoleURL     string
 
 	// gaugeSnapshot is the previous tick's (device_id, device_name) set
 	// used by refreshDeviceStalenessGauge to garbage-collect series for
@@ -166,6 +171,7 @@ func NewPipelineEvaluator(opts PipelineEvaluatorOpts) *PipelineEvaluator {
 		logq:           opts.LogQuerier,
 		logSearcher:    opts.LogSearcher,
 		deviceIdentity: opts.DeviceIdentityResolver,
+		consoleURL:     strings.TrimRight(strings.TrimSpace(opts.ConsoleURL), "/"),
 		log:            opts.Log,
 		now:            opts.Now,
 	}
@@ -430,6 +436,9 @@ func (e *PipelineEvaluator) notify(ctx context.Context, res *FiringResult, summa
 	}
 	if res.Incident.RunbookURL != "" {
 		msg.Labels["runbook_url"] = res.Incident.RunbookURL
+	}
+	if e.consoleURL != "" {
+		msg.Labels["console_url"] = e.consoleURL
 	}
 	// Preserve application identity for notification routing and correlation.
 	// Control labels such as incident_id/rule still come from the incident.

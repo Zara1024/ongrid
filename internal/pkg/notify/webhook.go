@@ -161,8 +161,12 @@ func formatFeishuCard(msg Message) map[string]any {
 	colorTemplate := "grey"
 	prefix := "🔔【系统通知】"
 
+	// Recovery / lifecycle presentation must follow structured status labels
+	// only. Never infer "resolved" from subject text — subjects can contain
+	// substrings like "unresolved" or service names like "systemd-resolved".
 	statusLower := strings.ToLower(strings.TrimSpace(msg.Labels["status"]))
-	isResolved := statusLower == "resolved" || strings.Contains(strings.ToLower(msg.Subject), "resolved")
+	isResolved := statusLower == "resolved"
+	isActive := statusLower == "" || statusLower == "open" || statusLower == "firing"
 
 	if isResolved {
 		colorTemplate = "green"
@@ -243,12 +247,14 @@ func formatFeishuCard(msg Message) map[string]any {
 	}
 
 	// 2. 告警状态 (生命周期状态跟踪)
+	// Domain active status is "open" (see alert model); "firing" is the event
+	// type / legacy label. Localize both as an active incident.
 	if isResolved {
 		addField("告警状态", "<font color='green'>RESOLVED (已恢复)</font>")
+	} else if isActive {
+		addField("告警状态", "<font color='red'>OPEN (发生中)</font>")
 	} else if statusLower != "" {
 		switch statusLower {
-		case "firing":
-			addField("告警状态", "<font color='red'>FIRING (发生中)</font>")
 		case "acknowledged", "ack":
 			addField("告警状态", "<font color='orange'>ACKNOWLEDGED (已认领)</font>")
 		case "silenced":
@@ -256,6 +262,11 @@ func formatFeishuCard(msg Message) map[string]any {
 		default:
 			addField("告警状态", strings.ToUpper(statusLower))
 		}
+	}
+
+	// Incident identity — keep a concise visible reference (not the long dedupe key).
+	if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
+		addField("事件 ID", "#"+iid)
 	}
 
 	// 3. 告警对象
@@ -352,6 +363,13 @@ func formatFeishuCard(msg Message) map[string]any {
 				"tag":  "button",
 				"text": map[string]any{"tag": "plain_text", "content": "📋 告警事件"},
 				"type": "default",
+				"url":  fmt.Sprintf("%s/alerts/incidents/%s", baseURL, iid),
+			})
+		} else {
+			actions = append(actions, map[string]any{
+				"tag":  "button",
+				"text": map[string]any{"tag": "plain_text", "content": "📋 告警事件"},
+				"type": "default",
 				"url":  fmt.Sprintf("%s/alerts", baseURL),
 			})
 		}
@@ -389,7 +407,6 @@ func formatFeishuCard(msg Message) map[string]any {
 	}
 }
 
-
 // NewDingTalkSender posts an ActionCard or Markdown payload compatible with DingTalk custom bots.
 func NewDingTalkSender(name, endpoint, secret string, client *http.Client) Sender {
 	return newWebhookSender(name, endpoint, secret, client, func(msg Message) (any, error) {
@@ -404,8 +421,12 @@ func NewDingTalkSender(name, endpoint, secret string, client *http.Client) Sende
 func formatDingTalkMessage(msg Message) map[string]any {
 	prefix := "🔔【系统通知】"
 
+	// Recovery / lifecycle presentation must follow structured status labels
+	// only. Never infer "resolved" from subject text — subjects can contain
+	// substrings like "unresolved" or service names like "systemd-resolved".
 	statusLower := strings.ToLower(strings.TrimSpace(msg.Labels["status"]))
-	isResolved := statusLower == "resolved" || strings.Contains(strings.ToLower(msg.Subject), "resolved")
+	isResolved := statusLower == "resolved"
+	isActive := statusLower == "" || statusLower == "open" || statusLower == "firing"
 
 	var sevColor, statusColor, sevText, statusText string
 
@@ -443,9 +464,10 @@ func formatDingTalkMessage(msg Message) map[string]any {
 			}
 		}
 
-		if statusLower == "firing" {
+		// Domain active status is "open"; "firing" is legacy / event-type label.
+		if isActive {
 			statusColor = "#EA3323"
-			statusText = "FIRING (发生中)"
+			statusText = "OPEN (发生中)"
 		} else if statusLower != "" {
 			statusColor = "#888888"
 			statusText = strings.ToUpper(statusLower)
@@ -474,6 +496,10 @@ func formatDingTalkMessage(msg Message) map[string]any {
 	}
 	if statusText != "" {
 		sb.WriteString(fmt.Sprintf("- **告警状态**：<font color=\"%s\">%s</font>\n", statusColor, statusText))
+	}
+
+	if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
+		sb.WriteString(fmt.Sprintf("- **事件 ID**：#%s\n", iid))
 	}
 
 	// 告警对象
@@ -554,6 +580,11 @@ func formatDingTalkMessage(msg Message) map[string]any {
 			})
 		}
 		if iid, ok := msg.Labels["incident_id"]; ok && iid != "" {
+			btns = append(btns, map[string]string{
+				"title":     "📋 告警事件",
+				"actionURL": fmt.Sprintf("%s/alerts/incidents/%s", baseURL, iid),
+			})
+		} else {
 			btns = append(btns, map[string]string{
 				"title":     "📋 告警事件",
 				"actionURL": fmt.Sprintf("%s/alerts", baseURL),

@@ -184,6 +184,7 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 		wantTpl  string
 	}{
 		{SeverityWarning, "firing", "orange"},
+		{SeverityWarning, "open", "orange"},
 		{SeverityInfo, "firing", "blue"},
 		{SeverityCritical, "acknowledged", "yellow"},
 		{SeverityCritical, "resolved", "green"},
@@ -208,6 +209,56 @@ func TestFeishuSenderEmitsInteractiveCard(t *testing.T) {
 	}
 }
 
+func TestFeishuCardIgnoresResolvedSubstringInSubject(t *testing.T) {
+	card := formatFeishuCard(Message{
+		Subject:  "unresolved errors above threshold on systemd-resolved",
+		Severity: SeverityCritical,
+		Labels: map[string]string{
+			"status":      "open",
+			"incident_id": "42",
+			"console_url": "https://console.example",
+			"device_id":   "7",
+		},
+	})
+
+	header, ok := card["header"].(map[string]any)
+	if !ok {
+		t.Fatalf("header missing: %#v", card["header"])
+	}
+	if header["template"] != "red" {
+		t.Fatalf("template = %v, want red (open critical must not be treated as recovery)", header["template"])
+	}
+
+	raw, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("marshal card: %v", err)
+	}
+	payload := string(raw)
+	if !strings.Contains(payload, "OPEN (发生中)") {
+		t.Errorf("expected OPEN status localization in card, got %s", payload)
+	}
+	if strings.Contains(payload, "RESOLVED (已恢复)") {
+		t.Errorf("status must not be marked resolved when Labels[status]=open: %s", payload)
+	}
+	if !strings.Contains(payload, "#42") || !strings.Contains(payload, "事件 ID") {
+		t.Errorf("expected visible incident ID #42 in card: %s", payload)
+	}
+	if !strings.Contains(payload, "https://console.example/alerts/incidents/42") {
+		t.Errorf("expected incident deep link /alerts/incidents/42 in card: %s", payload)
+	}
+}
+
+func TestFeishuCardResolvedOnlyFromStatusLabel(t *testing.T) {
+	card := formatFeishuCard(Message{
+		Subject:  "CPU high",
+		Severity: SeverityCritical,
+		Labels:   map[string]string{"status": "resolved"},
+	})
+	header := card["header"].(map[string]any)
+	if header["template"] != "green" {
+		t.Fatalf("resolved status template = %v, want green", header["template"])
+	}
+}
 
 func TestDingTalkSenderSignsURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -347,6 +398,7 @@ func TestDingTalkSenderActionCard(t *testing.T) {
 		Body:       "Device edge-node-01 has been disconnected for more than 5 minutes",
 		Source:     "alert-pipeline",
 		Labels: map[string]string{
+			"status":      "open",
 			"rule_name":   "主机离线告警",
 			"device_name": "edge-node-01",
 			"device_id":   "42",
@@ -380,10 +432,82 @@ func TestDingTalkSenderActionCard(t *testing.T) {
 	if !strings.Contains(text, "CRITICAL (严重)") {
 		t.Errorf("expected text to contain CRITICAL (严重), got %q", text)
 	}
+	if !strings.Contains(text, "OPEN (发生中)") {
+		t.Errorf("expected text to contain OPEN (发生中), got %q", text)
+	}
+	if !strings.Contains(text, "#101") {
+		t.Errorf("expected visible incident id #101 in text, got %q", text)
+	}
 
 	btns, ok := card["btns"].([]any)
 	if !ok || len(btns) != 3 {
 		t.Fatalf("expected 3 buttons, got %v", card["btns"])
+	}
+	foundIncidentDeepLink := false
+	for _, raw := range btns {
+		btn, _ := raw.(map[string]any)
+		if btn["actionURL"] == "https://ongrid.example.com/alerts/incidents/101" {
+			foundIncidentDeepLink = true
+		}
+	}
+	if !foundIncidentDeepLink {
+		t.Fatalf("expected incident deep link button, got %#v", btns)
+	}
+}
+
+func TestDingTalkCardIgnoresResolvedSubstringInSubject(t *testing.T) {
+	payload := formatDingTalkMessage(Message{
+		Subject:  "unresolved errors above threshold on systemd-resolved",
+		Severity: SeverityCritical,
+		Labels: map[string]string{
+			"status":      "open",
+			"incident_id": "42",
+			"console_url": "https://console.example",
+			"device_id":   "7",
+		},
+	})
+	if payload["msgtype"] != "actionCard" {
+		t.Fatalf("msgtype = %v, want actionCard", payload["msgtype"])
+	}
+	card := payload["actionCard"].(map[string]any)
+	title, _ := card["title"].(string)
+	if strings.Contains(title, "告警恢复") {
+		t.Fatalf("title must not be recovery for open critical: %q", title)
+	}
+	if !strings.Contains(title, "严重告警") {
+		t.Fatalf("title = %q, want critical alert prefix", title)
+	}
+	text, _ := card["text"].(string)
+	if !strings.Contains(text, "OPEN (发生中)") {
+		t.Errorf("expected OPEN status localization, got %q", text)
+	}
+	if strings.Contains(text, "RESOLVED") {
+		t.Errorf("must not mark resolved when Labels[status]=open: %q", text)
+	}
+	if !strings.Contains(text, "#42") {
+		t.Errorf("expected visible incident id, got %q", text)
+	}
+
+	found := false
+	switch btns := card["btns"].(type) {
+	case []map[string]string:
+		for _, btn := range btns {
+			if btn["actionURL"] == "https://console.example/alerts/incidents/42" {
+				found = true
+			}
+		}
+	case []any:
+		for _, raw := range btns {
+			btn, _ := raw.(map[string]any)
+			if btn["actionURL"] == "https://console.example/alerts/incidents/42" {
+				found = true
+			}
+		}
+	default:
+		t.Fatalf("unexpected btns type %T: %#v", card["btns"], card["btns"])
+	}
+	if !found {
+		t.Fatalf("expected incident deep link, got %#v", card["btns"])
 	}
 }
 
