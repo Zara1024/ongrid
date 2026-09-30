@@ -389,7 +389,7 @@ if [[ -z "$NEW_VERSION" ]]; then
 fi
 [[ -n "$NEW_VERSION" ]] || { log_error "cannot determine new version"; exit 1; }
 log_info "new version: ${NEW_VERSION}"
-MIGRATION_HELPER_IMAGE="docker.cnb.cool/zara1024/ongrid:${NEW_VERSION}"
+MIGRATION_HELPER_IMAGE="docker.cnb.cool/zara1024/opspilot:${NEW_VERSION}"
 
 OLD_VERSION=$(grep -E '^ONGRID_VERSION=' "$ENV_FILE" | cut -d= -f2- | tr -d '[:space:]' || true)
 log_info "old version: ${OLD_VERSION:-unknown}"
@@ -793,8 +793,8 @@ if [[ $HEALTH_OK -eq 1 ]]; then
     # up. `docker image prune -af` would also remove cached build layers
     # for unrelated workloads; filter to ongrid* repos.
     for repo in \
-        docker.cnb.cool/zara1024/ongrid \
-        docker.cnb.cool/zara1024/ongrid/ongrid-web; do
+        docker.cnb.cool/zara1024/opspilot \
+        docker.cnb.cool/zara1024/opspilot/opspilot-web; do
         # List image refs matching <repo>:* and drop those that don't
         # match $NEW_VERSION. compose holds the running tag, so docker
         # won't actually delete an in-use image (it'll print "image is

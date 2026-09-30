@@ -126,8 +126,8 @@ rm -rf "$INSTALL_DIR"
 
 if [[ -n "$VERSION_FROM_FILE" ]]; then
     for image in \
-        "docker.cnb.cool/zara1024/ongrid:${VERSION_FROM_FILE}" \
-        "docker.cnb.cool/zara1024/ongrid/ongrid-web:${VERSION_FROM_FILE}"; do
+        "docker.cnb.cool/zara1024/opspilot:${VERSION_FROM_FILE}" \
+        "docker.cnb.cool/zara1024/opspilot/opspilot-web:${VERSION_FROM_FILE}"; do
         log_info "removing $image"
         docker image rm "$image" 2>/dev/null || true
     done

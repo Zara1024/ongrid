@@ -30,16 +30,16 @@ PACKAGE_CLEAN ?= 1
 # Local builds default to amd64. Release publishing produces one multi-arch
 # manifest independently of the manager package architecture.
 CLOUD_IMAGE_PLATFORMS ?= linux/amd64,linux/arm64
-CLOUD_IMAGE_REPO ?= docker.cnb.cool/zara1024/ongrid
+CLOUD_IMAGE_REPO ?= docker.cnb.cool/zara1024/opspilot
 CLOUD_MANAGER_IMAGE_REF ?= $(CLOUD_IMAGE_REPO):$(VERSION)
-CLOUD_WEB_IMAGE_REF ?= $(CLOUD_IMAGE_REPO)/ongrid-web:$(VERSION)
+CLOUD_WEB_IMAGE_REF ?= $(CLOUD_IMAGE_REPO)/opspilot-web:$(VERSION)
 FRONTIER_VERSION ?= 1.2.6
 FRONTIER_SOURCE_IMAGES ?= docker.io/singchia/frontier:$(FRONTIER_VERSION)
 FRONTIER_MIRROR_IMAGE ?= $(CLOUD_IMAGE_REPO)/frontier:$(FRONTIER_VERSION)
 K8S_EDGE_IMAGE_PLATFORM ?= linux/amd64
 K8S_EDGE_IMAGE_PLATFORMS ?= linux/amd64,linux/arm64
 K8S_EDGE_IMAGE_TAG ?= $(VERSION)
-K8S_EDGE_IMAGE_REPO ?= docker.cnb.cool/zara1024/ongrid-edge
+K8S_EDGE_IMAGE_REPO ?= docker.cnb.cool/zara1024/opspilot-edge
 K8S_EDGE_IMAGE_REF ?= $(K8S_EDGE_IMAGE_REPO):$(K8S_EDGE_IMAGE_TAG)
 # Edge installer payloads are direct CNB Release attachments. Public
 # dependencies use an immutable tag derived from every upstream version and
@@ -48,14 +48,14 @@ EDGE_ATTACHMENT_TARGETS ?= linux-amd64 linux-arm64
 OBI_VERSION ?= 0.12.1
 EDGE_DEPS_TAG ?= edge-deps-layout2-obi$(OBI_VERSION)-o$(OTELCOL_VERSION)-n$(NODE_EXPORTER_VERSION)-pr$(PROCESS_EXPORTER_VERSION)-my$(MYSQLD_EXPORTER_VERSION)-pg$(POSTGRES_EXPORTER_VERSION)-r$(REDIS_EXPORTER_VERSION)-m$(MONGODB_EXPORTER_VERSION)
 EDGE_ATTACHMENTS_OUT ?= $(OUT)/edge-attachments
-CNB_RELEASE_BASE_URL ?= https://cnb.cool/zara1024/ongrid-edge/-/releases/download
-CNB_REPO_SLUG ?= zara1024/ongrid-edge
+CNB_RELEASE_BASE_URL ?= https://cnb.cool/zara1024/opspilot-edge/-/releases/download
+CNB_REPO_SLUG ?= zara1024/opspilot-edge
 CNB_ATTACHMENTS_IMAGE ?= cnbcool/attachments@sha256:37c2d53fed9accee6ea0a509a05a4d05e4b36af37d5319451c2284e287b9e935
 CNB_API_ENDPOINT ?= https://api.cnb.cool
 CNB_RELEASE_TARGET_COMMITISH ?= main
 K8S_CHART_VERSION ?= $(patsubst v%,%,$(VERSION))
 K8S_CHART_PACKAGE ?= $(BIN_DIR)/k8s/ongrid-edge.tgz
-K8S_CHART_REF ?= oci://helm.cnb.cool/zara1024/ongrid-edge
+K8S_CHART_REF ?= oci://helm.cnb.cool/zara1024/opspilot-edge
 K8S_CHART_PUSH_TARGET ?= oci://helm.cnb.cool/zara1024
 CNB_HELM_REGISTRY ?= helm.cnb.cool
 CNB_HELM_USERNAME ?= cnb

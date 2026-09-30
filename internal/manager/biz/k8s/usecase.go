@@ -34,7 +34,7 @@ const (
 	hpaMetricWarningWindow      = 5 * time.Minute
 	eventRetentionBatchLimit    = 1000
 	bootstrapTokenBytes         = 32
-	defaultK8sChartRef          = "oci://helm.cnb.cool/zara1024/ongrid-edge"
+	defaultK8sChartRef          = "oci://helm.cnb.cool/zara1024/opspilot-edge"
 	telemetryAuthModeTelemetry  = "telemetry"
 	telemetryAuthModeBackend    = "backend"
 )

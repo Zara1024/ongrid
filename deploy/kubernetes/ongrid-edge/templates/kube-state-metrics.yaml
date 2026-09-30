@@ -1,7 +1,7 @@
 {{- $ksm := default dict .Values.kubeStateMetrics -}}
 {{- if eq (include "ongrid-edge.kubeStateMetricsEnabled" .) "true" }}
 {{- $image := default dict $ksm.image -}}
-{{- $imageRepository := default "docker.cnb.cool/zara1024/ongrid-edge/kube-state-metrics" $image.repository -}}
+{{- $imageRepository := default "docker.cnb.cool/zara1024/opspilot-edge/kube-state-metrics" $image.repository -}}
 {{- $resources := default dict $ksm.resources -}}
 {{- $port := default 8080 $ksm.port -}}
 {{- $telemetryPort := default 8081 $ksm.telemetryPort -}}

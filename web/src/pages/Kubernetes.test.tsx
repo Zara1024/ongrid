@@ -38,7 +38,7 @@ const cluster = {
   },
   created_at: '2026-06-29T09:00:00Z',
   updated_at: '2026-06-29T10:00:00Z',
-  upgrade_command: "helm upgrade ongrid-edge 'oci://helm.cnb.cool/zara1024/ongrid-edge' --version '0.10.0' --namespace 'ongrid-system' --reset-then-reuse-values --set-string manager.publicURL='https://manager.example' --set-string manager.tunnelAddr='manager.example:40012' --set-string manager.tlsInsecure=true --wait --wait-for-jobs --atomic --timeout '15m'",
+  upgrade_command: "helm upgrade ongrid-edge 'oci://helm.cnb.cool/zara1024/opspilot-edge' --version '0.10.0' --namespace 'ongrid-system' --reset-then-reuse-values --set-string manager.publicURL='https://manager.example' --set-string manager.tunnelAddr='manager.example:40012' --set-string manager.tlsInsecure=true --wait --wait-for-jobs --atomic --timeout '15m'",
 };
 
 function ChatStateProbe() {
@@ -372,7 +372,7 @@ describe('KubernetesPage', () => {
           bootstrap_token: 'g-token',
           node_bootstrap_token: 'n-token',
           install_command:
-            "helm upgrade --install ongrid-edge 'oci://helm.cnb.cool/zara1024/ongrid-edge' --version '0.10.0' --namespace ongrid-system --create-namespace --set-string manager.publicURL='https://<manager>' --set-string manager.tunnelAddr='<manager>:40012' --set-string manager.tlsInsecure=true --set-string enrollment.clusterID=4 --set-string enrollment.controllerBootstrapToken='g-token' --set-string enrollment.nodeBootstrapToken='n-token' --set-string mode='full-node'",
+            "helm upgrade --install ongrid-edge 'oci://helm.cnb.cool/zara1024/opspilot-edge' --version '0.10.0' --namespace ongrid-system --create-namespace --set-string manager.publicURL='https://<manager>' --set-string manager.tunnelAddr='<manager>:40012' --set-string manager.tlsInsecure=true --set-string enrollment.clusterID=4 --set-string enrollment.controllerBootstrapToken='g-token' --set-string enrollment.nodeBootstrapToken='n-token' --set-string mode='full-node'",
         });
       }),
     );
@@ -972,7 +972,7 @@ describe('KubernetesPage', () => {
 
     expect(screen.getByText('一键 Helm 升级')).toBeInTheDocument();
     const command = screen.getByText(/helm upgrade ongrid-edge/);
-    expect(command).toHaveTextContent("'oci://helm.cnb.cool/zara1024/ongrid-edge'");
+    expect(command).toHaveTextContent("'oci://helm.cnb.cool/zara1024/opspilot-edge'");
     expect(command).toHaveTextContent("--version '0.10.0'");
     expect(command).toHaveTextContent("--namespace 'ongrid-system'");
     expect(command).toHaveTextContent('--reset-then-reuse-values');

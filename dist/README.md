@@ -39,7 +39,7 @@ ongrid-v<VERSION>-linux/
 
 The package supports Compose installation only and does not embed image
 tarballs or Manager systemd binaries. `install.sh` renders the production
-Compose model, pulls every exact image from `docker.cnb.cool/zara1024/ongrid`,
+Compose model, pulls every exact image from `docker.cnb.cool/zara1024/opspilot`,
 then runs `docker compose up -d`. Before changing the served `/edge` tree, the
 installer downloads checksum-verified third-party dependencies and the current
 `ongrid-edge` binary directly from CNB Release attachments. Set
@@ -56,7 +56,7 @@ installer downloads checksum-verified third-party dependencies and the current
 2. The `Release` GitHub Actions workflow runs on `v*.*.*` tag pushes and
    publishes the multi-architecture manager, Web, and Kubernetes Edge images
    plus the matching Helm chart before building the universal server package. The chart is published as an
-   OCI artifact at `oci://helm.cnb.cool/zara1024/ongrid-edge`; it is not copied
+   OCI artifact at `oci://helm.cnb.cool/zara1024/opspilot-edge`; it is not copied
    into the manager installation tarball. The release build will:
    - `docker-push-release-images` — publish manager, Web, and Edge amd64/arm64 images to CNB
    - `verify-release-images` — verify both architectures exist on all three image manifests

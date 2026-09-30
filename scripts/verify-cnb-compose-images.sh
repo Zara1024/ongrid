@@ -20,18 +20,18 @@ render_images() {
 
 render_images "$repo_root/deploy/install/docker-compose.yml" "$tmp_dir/install.actual"
 cat >"$tmp_dir/install.expected" <<'EOF'
-docker.cnb.cool/zara1024/ongrid/ongrid-web:v9.9.9
-docker.cnb.cool/zara1024/ongrid:v9.9.9
-docker.cnb.cool/zara1024/ongrid/frontier:1.2.6
-docker.cnb.cool/zara1024/ongrid/grafana-oss:11.1.4
-docker.cnb.cool/zara1024/ongrid/loki:3.4.0
-docker.cnb.cool/zara1024/ongrid/mysql:8.0
-docker.cnb.cool/zara1024/ongrid/opentelemetry-collector-contrib:0.157.0
-docker.cnb.cool/zara1024/ongrid/prometheus:v2.54.0
-docker.cnb.cool/zara1024/ongrid/pyroscope:1.21.1
-docker.cnb.cool/zara1024/ongrid/qdrant:v1.11.3
-docker.cnb.cool/zara1024/ongrid/searxng:latest
-docker.cnb.cool/zara1024/ongrid/tempo:2.10.0
+docker.cnb.cool/zara1024/opspilot/opspilot-web:v9.9.9
+docker.cnb.cool/zara1024/opspilot:v9.9.9
+docker.cnb.cool/zara1024/opspilot/frontier:1.2.6
+docker.cnb.cool/zara1024/opspilot/grafana-oss:11.1.4
+docker.cnb.cool/zara1024/opspilot/loki:3.4.0
+docker.cnb.cool/zara1024/opspilot/mysql:8.0
+docker.cnb.cool/zara1024/opspilot/opentelemetry-collector-contrib:0.157.0
+docker.cnb.cool/zara1024/opspilot/prometheus:v2.54.0
+docker.cnb.cool/zara1024/opspilot/pyroscope:1.21.1
+docker.cnb.cool/zara1024/opspilot/qdrant:v1.11.3
+docker.cnb.cool/zara1024/opspilot/searxng:latest
+docker.cnb.cool/zara1024/opspilot/tempo:2.10.0
 docker.cnb.cool/zara1024/pcap-parser:v0.12.0@sha256:5b117be302e61cfa1a964ac8649580185cb41868369471001c10d372ac4e9b5a
 EOF
 sort -o "$tmp_dir/install.expected" "$tmp_dir/install.expected"
@@ -39,14 +39,14 @@ diff -u "$tmp_dir/install.expected" "$tmp_dir/install.actual"
 
 render_images "$repo_root/deploy/docker-compose.yml" "$tmp_dir/dev.actual"
 cat >"$tmp_dir/dev.expected" <<'EOF'
-docker.cnb.cool/zara1024/ongrid/frontier:1.2.6
-docker.cnb.cool/zara1024/ongrid/grafana-oss:11.1.4
-docker.cnb.cool/zara1024/ongrid/loki:3.4.0
-docker.cnb.cool/zara1024/ongrid/mysql:8.0
-docker.cnb.cool/zara1024/ongrid/prometheus:v2.54.0
-docker.cnb.cool/zara1024/ongrid/qdrant:v1.11.3
-docker.cnb.cool/zara1024/ongrid/searxng:latest
-docker.cnb.cool/zara1024/ongrid/tempo:2.10.0
+docker.cnb.cool/zara1024/opspilot/frontier:1.2.6
+docker.cnb.cool/zara1024/opspilot/grafana-oss:11.1.4
+docker.cnb.cool/zara1024/opspilot/loki:3.4.0
+docker.cnb.cool/zara1024/opspilot/mysql:8.0
+docker.cnb.cool/zara1024/opspilot/prometheus:v2.54.0
+docker.cnb.cool/zara1024/opspilot/qdrant:v1.11.3
+docker.cnb.cool/zara1024/opspilot/searxng:latest
+docker.cnb.cool/zara1024/opspilot/tempo:2.10.0
 grafana/pyroscope:1.21.1
 ongrid-web:v9.9.9
 ongrid:v9.9.9

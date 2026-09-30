@@ -204,6 +204,6 @@ true
 {{- end -}}
 
 {{- define "ongrid-edge.image" -}}
-{{- $repo := default "docker.cnb.cool/zara1024/ongrid-edge" .Values.image.repository -}}
+{{- $repo := default "docker.cnb.cool/zara1024/opspilot-edge" .Values.image.repository -}}
 {{- printf "%s:%s" $repo (default .Chart.AppVersion .Values.image.tag) -}}
 {{- end -}}

@@ -176,7 +176,7 @@ func TestInstallCommandDerivesExternalTunnelAddr(t *testing.T) {
 	if !strings.Contains(cmd, "--set-string manager.tlsInsecure=true") {
 		t.Fatalf("install command missing tlsInsecure for self-signed manager TLS: %s", cmd)
 	}
-	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/ongrid-edge'") {
+	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/opspilot-edge'") {
 		t.Fatalf("install command should use the CNB OCI chart: %s", cmd)
 	}
 	if !strings.Contains(cmd, "--version '0.10.0'") {
@@ -190,7 +190,7 @@ func TestInstallCommandOmitsChartVersionForDevBuild(t *testing.T) {
 		ImageTag:  "dev",
 	})
 	cmd := uc.installCommand(6, model.ModeFullNode, "controller-token", "node-token")
-	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/ongrid-edge'") {
+	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/opspilot-edge'") {
 		t.Fatalf("install command should use the CNB OCI chart: %s", cmd)
 	}
 	if strings.Contains(cmd, "--version") {
@@ -207,7 +207,7 @@ func TestUpgradeCommandUsesManagerConfig(t *testing.T) {
 	command := uc.UpgradeCommand(&model.Cluster{ControllerNamespace: "ongrid-system"})
 	for _, want := range []string{
 		"helm upgrade ongrid-edge",
-		"'oci://helm.cnb.cool/zara1024/ongrid-edge'",
+		"'oci://helm.cnb.cool/zara1024/opspilot-edge'",
 		"--version '0.9.1'",
 		"--namespace 'ongrid-system'",
 		"--reset-then-reuse-values",
@@ -240,7 +240,7 @@ func TestInstallCommandKeepsPlaceholdersWhenExternalAddressUnknown(t *testing.T)
 	if !strings.Contains(cmd, "--set-string manager.tlsInsecure=true") {
 		t.Fatalf("install command missing tlsInsecure for self-signed manager TLS: %s", cmd)
 	}
-	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/ongrid-edge'") {
+	if !strings.Contains(cmd, "'oci://helm.cnb.cool/zara1024/opspilot-edge'") {
 		t.Fatalf("install command should use the CNB OCI chart: %s", cmd)
 	}
 	if !strings.Contains(cmd, "--version '0.10.0'") {

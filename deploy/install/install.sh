@@ -863,7 +863,7 @@ if [[ $PROFILE_MONITORING -eq 1 ]]; then
 fi
 
 # Pull every rendered image before starting anything. All production Compose
-# images live under docker.cnb.cool/zara1024/ongrid; rendering first also
+# images live under docker.cnb.cool/zara1024/opspilot; rendering first also
 # validates the generated .env and any operator-provided override file.
 log_info "validating and pulling runtime images from CNB"
 if ! RUNTIME_IMAGES=$(

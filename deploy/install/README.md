@@ -51,7 +51,7 @@ sudo ./install.sh
 4. 拷贝 `docker-compose.yml`、`nginx.conf`、`prometheus.yml`、`grafana/`、`edge/`、`VERSION` 到安装目录。
 5. **生成自签 TLS 证书**（首次安装且 `certs/tls.crt` 不存在时）：通过临时 OpenSSL 配置生成 CN=ongrid、SAN 包含 `ongrid` / `localhost` / `127.0.0.1` 的 365 天证书，落到 `${INSTALL_DIR}/certs/`，私钥 `chmod 600`。脚本不交互，直接生成；末尾 banner 提示替换真证书。
 6. 若 `/opt/ongrid/.env` 不存在则从 `.env.example` 创建，并对空字段（`MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、`ONGRID_JWT_SECRET`、`ONGRID_ADMIN_PASSWORD`）生成随机值，文件权限置 `600`。
-7. 先渲染 Compose 配置并从 `docker.cnb.cool/zara1024/ongrid` 拉取全部精确镜像；任一镜像不可用即停止，不启动半套服务。
+7. 先渲染 Compose 配置并从 `docker.cnb.cool/zara1024/opspilot` 拉取全部精确镜像；任一镜像不可用即停止，不启动半套服务。
 8. `docker compose up -d` 启动 MySQL + ongrid + frontier + nginx + prometheus（ADR-009）。
 9. 轮询 `https://localhost:${ONGRID_HTTP_PORT}/healthz`（nginx 透传到 manager，`-k` 跳过自签校验）最多 60 秒。
 10. 打印安装摘要，包括 **Web URL**、**API URL** 与 **管理员初始密码**（只显示一次，务必立即记录）。
@@ -89,7 +89,7 @@ sudo ./upgrade.sh
 
 ### Edge 制品来源
 
-默认安装直接访问 `https://cnb.cool/zara1024/ongrid-edge/-/releases/download/`。公共组件位于安装包锁定的不可变 `edge-deps-*` Release，只有组件版本或布局变化才重新上传；自研 `ongrid-edge` 位于当前 Ongrid 版本（例如 `v0.11.1`）Release。新安装根据宿主机架构只准备 `linux-amd64` 或 `linux-arm64` 中匹配的一种：
+默认安装直接访问 `https://cnb.cool/zara1024/opspilot-edge/-/releases/download/`。公共组件位于安装包锁定的不可变 `edge-deps-*` Release，只有组件版本或布局变化才重新上传；自研 `ongrid-edge` 位于当前 Ongrid 版本（例如 `v0.11.1`）Release。新安装根据宿主机架构只准备 `linux-amd64` 或 `linux-arm64` 中匹配的一种：
 
 | 变量 | 说明 |
 |------|------|
@@ -231,7 +231,7 @@ for v in ongrid_mysql_data:mysql prometheus_data:prometheus loki_data:loki tempo
     SRC="${v%%:*}"
     DST="${v##*:}"
     if [[ "$DST" == "ongrid" ]]; then DSTDIR=/var/log/ongrid; else DSTDIR=/var/lib/ongrid/$DST; fi
-    MANAGER_IMAGE="docker.cnb.cool/zara1024/ongrid:$(grep '^ONGRID_VERSION=' /opt/ongrid/.env | cut -d= -f2-)"
+    MANAGER_IMAGE="docker.cnb.cool/zara1024/opspilot:$(grep '^ONGRID_VERSION=' /opt/ongrid/.env | cut -d= -f2-)"
     sudo docker run --rm --user 0 --entrypoint sh \
         -v "$SRC":/src:ro -v "$DSTDIR":/dst "$MANAGER_IMAGE" -c 'cp -a /src/. /dst/'
 done
