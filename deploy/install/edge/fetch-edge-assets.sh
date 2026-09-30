@@ -18,7 +18,7 @@ fi
 VERIFY_DEPS_SCRIPT="$SCRIPT_DIR/verify-edge-deps-archive.sh"
 EDGE_ASSETS_LIB="$SCRIPT_DIR/edge-assets-lib.sh"
 
-BASE_URL=${ONGRID_EDGE_ARTIFACT_BASE_URL:-https://cnb.cool/ongridio/ongrid-edge/-/releases/download}
+BASE_URL=${ONGRID_EDGE_ARTIFACT_BASE_URL:-https://cnb.cool/zara1024/ongrid-edge/-/releases/download}
 DEPS_TAG=${ONGRID_EDGE_DEPS_TAG:-$CONFIG_DEPS_TAG}
 [[ -n "$DEPS_TAG" ]] || { echo "ONGRID_EDGE_DEPS_TAG is required (normally provided by edge-artifacts.env)" >&2; exit 1; }
 CACHE_DIR=${ONGRID_EDGE_ARTIFACT_CACHE_DIR:-/var/cache/ongrid/edge-artifacts}

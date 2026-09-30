@@ -19,7 +19,7 @@
 
 services:
   mysql:
-    image: docker.cnb.cool/ongridio/ongrid/mysql:8.0
+    image: docker.cnb.cool/zara1024/ongrid/mysql:8.0
     container_name: ongrid-mysql
     restart: unless-stopped
     environment:
@@ -50,7 +50,7 @@ services:
         max-file: "5"
 
   ongrid:
-    image: docker.cnb.cool/ongridio/ongrid:${ONGRID_VERSION}
+    image: docker.cnb.cool/zara1024/ongrid:${ONGRID_VERSION}
     container_name: ongrid
     restart: unless-stopped
     depends_on:
@@ -282,7 +282,7 @@ services:
   frontier:
     # Upstream broker mirrored to the project CNB registry. The pinned tag is
     # bumped together with Makefile var FRONTIER_VERSION.
-    image: docker.cnb.cool/ongridio/ongrid/frontier:1.2.6
+    image: docker.cnb.cool/zara1024/ongrid/frontier:1.2.6
     container_name: ongrid-frontier
     restart: unless-stopped
     volumes:
@@ -303,7 +303,7 @@ services:
   # Image bakes web/dist/ in; nginx.conf and certs/ are bind-mounted so
   # operators can edit them without rebuilding the image.
   nginx:
-    image: docker.cnb.cool/ongridio/ongrid/ongrid-web:${ONGRID_VERSION}
+    image: docker.cnb.cool/zara1024/ongrid/ongrid-web:${ONGRID_VERSION}
     container_name: ongrid-nginx
     restart: unless-stopped
     depends_on:
@@ -329,7 +329,7 @@ services:
   # Native Wireshark packet dissector. This service has no `ports` mapping:
   # only Compose peers can reach its signed HTTP/gRPC listeners.
   pcap-parser:
-    image: ${ONGRID_PCAP_PARSER_IMAGE:-docker.cnb.cool/ongridio/pcap-parser:v0.12.0@sha256:5b117be302e61cfa1a964ac8649580185cb41868369471001c10d372ac4e9b5a}
+    image: ${ONGRID_PCAP_PARSER_IMAGE:-docker.cnb.cool/zara1024/pcap-parser:v0.12.0@sha256:5b117be302e61cfa1a964ac8649580185cb41868369471001c10d372ac4e9b5a}
     container_name: ongrid-pcap-parser
     restart: unless-stopped
     environment:
@@ -353,7 +353,7 @@ services:
   # tool. Not published to host — manager reaches it on the docker network
   # at http://prometheus:9090/prometheus. Retention defaults: 90d / 20GB cap.
   prometheus:
-    image: docker.cnb.cool/ongridio/ongrid/prometheus:v2.54.0
+    image: docker.cnb.cool/zara1024/ongrid/prometheus:v2.54.0
     container_name: ongrid-prometheus
     restart: unless-stopped
     command:
@@ -395,7 +395,7 @@ services:
   # 3100 — public access flows through nginx /loki/api/v1/push with
   # auth_request → manager edgeauth (ADR-014 §决策).
   loki:
-    image: docker.cnb.cool/ongridio/ongrid/loki:3.4.0
+    image: docker.cnb.cool/zara1024/ongrid/loki:3.4.0
     container_name: ongrid-loki
     restart: unless-stopped
     environment:
@@ -420,7 +420,7 @@ services:
   # host. Edges push to nginx /v1/traces with auth_request → manager
   # edgeauth (ADR-014 §决策第 1 条); manager Go is NOT on this byte stream.
   tempo:
-    image: docker.cnb.cool/ongridio/ongrid/tempo:2.10.0
+    image: docker.cnb.cool/zara1024/ongrid/tempo:2.10.0
     container_name: ongrid-tempo
     restart: unless-stopped
     environment:
@@ -443,7 +443,7 @@ services:
         max-file: "5"
 
   profiles-gateway:
-    image: docker.cnb.cool/ongridio/ongrid/opentelemetry-collector-contrib:0.157.0
+    image: docker.cnb.cool/zara1024/ongrid/opentelemetry-collector-contrib:0.157.0
     container_name: ongrid-profiles-gateway
     restart: unless-stopped
     command:
@@ -460,7 +460,7 @@ services:
         max-file: "5"
 
   pyroscope:
-    image: docker.cnb.cool/ongridio/ongrid/pyroscope:1.21.1
+    image: docker.cnb.cool/zara1024/ongrid/pyroscope:1.21.1
     container_name: ongrid-pyroscope
     restart: unless-stopped
     command:
@@ -484,7 +484,7 @@ services:
   # external port (knowledge-base writes / queries all go through the
   # manager API).
   qdrant:
-    image: docker.cnb.cool/ongridio/ongrid/qdrant:v1.11.3
+    image: docker.cnb.cool/zara1024/ongrid/qdrant:v1.11.3
     container_name: ongrid-qdrant
     restart: unless-stopped
     volumes:
@@ -506,7 +506,7 @@ services:
   # JSON-format API is enabled in settings.yml; SearXNG's secret_key
   # is hard-coded since the service is not exposed publicly.
   searxng:
-    image: docker.cnb.cool/ongridio/ongrid/searxng:latest
+    image: docker.cnb.cool/zara1024/ongrid/searxng:latest
     container_name: ongrid-searxng
     restart: unless-stopped
     environment:
@@ -521,7 +521,7 @@ services:
         max-file: "5"
 
   grafana:
-    image: docker.cnb.cool/ongridio/ongrid/grafana-oss:11.1.4
+    image: docker.cnb.cool/zara1024/ongrid/grafana-oss:11.1.4
     container_name: ongrid-grafana
     restart: unless-stopped
     depends_on:

@@ -135,7 +135,7 @@ ensure_pcap_parser_upgrade_env() {
 
     parser_image=$(grep -E '^ONGRID_PCAP_PARSER_IMAGE=' "$ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)
     if [[ -z "$parser_image" ]]; then
-        set_env_value ONGRID_PCAP_PARSER_IMAGE 'docker.cnb.cool/ongridio/pcap-parser:v0.12.0@sha256:5b117be302e61cfa1a964ac8649580185cb41868369471001c10d372ac4e9b5a'
+        set_env_value ONGRID_PCAP_PARSER_IMAGE 'docker.cnb.cool/zara1024/pcap-parser:v0.12.0@sha256:5b117be302e61cfa1a964ac8649580185cb41868369471001c10d372ac4e9b5a'
         log_info "backfilled ONGRID_PCAP_PARSER_IMAGE"
     fi
 
@@ -389,7 +389,7 @@ if [[ -z "$NEW_VERSION" ]]; then
 fi
 [[ -n "$NEW_VERSION" ]] || { log_error "cannot determine new version"; exit 1; }
 log_info "new version: ${NEW_VERSION}"
-MIGRATION_HELPER_IMAGE="docker.cnb.cool/ongridio/ongrid:${NEW_VERSION}"
+MIGRATION_HELPER_IMAGE="docker.cnb.cool/zara1024/ongrid:${NEW_VERSION}"
 
 OLD_VERSION=$(grep -E '^ONGRID_VERSION=' "$ENV_FILE" | cut -d= -f2- | tr -d '[:space:]' || true)
 log_info "old version: ${OLD_VERSION:-unknown}"
@@ -793,8 +793,8 @@ if [[ $HEALTH_OK -eq 1 ]]; then
     # up. `docker image prune -af` would also remove cached build layers
     # for unrelated workloads; filter to ongrid* repos.
     for repo in \
-        docker.cnb.cool/ongridio/ongrid \
-        docker.cnb.cool/ongridio/ongrid/ongrid-web; do
+        docker.cnb.cool/zara1024/ongrid \
+        docker.cnb.cool/zara1024/ongrid/ongrid-web; do
         # List image refs matching <repo>:* and drop those that don't
         # match $NEW_VERSION. compose holds the running tag, so docker
         # won't actually delete an in-use image (it'll print "image is

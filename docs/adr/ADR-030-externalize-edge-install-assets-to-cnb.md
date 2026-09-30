@@ -39,7 +39,7 @@ Manager 当前通过本地 `/opt/ongrid/edge` 同时提供 Edge 网络安装器�
 
 例如 `v0.11.1` 的下载地址为：
 
-`https://cnb.cool/ongridio/ongrid-edge/-/releases/download/v0.11.1/ongrid-edge-linux-amd64-v0.11.1`
+`https://cnb.cool/zara1024/ongrid-edge/-/releases/download/v0.11.1/ongrid-edge-linux-amd64-v0.11.1`
 
 安装端使用普通 HTTPS `curl` 直接下载，不需要 Docker 拉取制品镜像、创建临时容器或从镜像层复制文件。
 

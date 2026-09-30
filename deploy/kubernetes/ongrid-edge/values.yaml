@@ -14,7 +14,7 @@ image:
   # Leave empty to let Kubernetes select nodes from the image manifest. Set
   # amd64 or arm64 only when this release intentionally targets one architecture.
   architecture: ""
-  repository: docker.cnb.cool/ongridio/ongrid-edge
+  repository: docker.cnb.cool/zara1024/ongrid-edge
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -71,7 +71,7 @@ kubeStateMetrics:
   image:
     # Ongrid-maintained mirror used by the default online installation.
     # Offline installations can override this with their internal registry.
-    repository: docker.cnb.cool/ongridio/ongrid-edge/kube-state-metrics
+    repository: docker.cnb.cool/zara1024/ongrid-edge/kube-state-metrics
     tag: v2.16.0
     pullPolicy: IfNotPresent
   port: 8080
