@@ -554,3 +554,26 @@ func TestDingTalkSenderMarkdownFallback(t *testing.T) {
 	}
 }
 
+func TestDingTalkCardOmitsOpenForOrdinaryNotification(t *testing.T) {
+	payload := formatDingTalkMessage(Message{Subject: "Daily report", Severity: SeverityInfo})
+	card := payload["markdown"].(map[string]any)
+	text := card["text"].(string)
+	if strings.Contains(text, "OPEN") || !strings.Contains(text, "INFO (信息)") {
+		t.Fatalf("ordinary notification rendering = %q", text)
+	}
+}
+
+func TestDingTalkCardKeepsSeverityForLifecycleStatuses(t *testing.T) {
+	for _, status := range []string{"acknowledged", "resolved", "silenced"} {
+		payload := formatDingTalkMessage(Message{Subject: "CPU high", Severity: SeverityCritical, Labels: map[string]string{"status": status}})
+		var card map[string]any
+		if payload["msgtype"] == "actionCard" {
+			card = payload["actionCard"].(map[string]any)
+		} else {
+			card = payload["markdown"].(map[string]any)
+		}
+		if !strings.Contains(card["text"].(string), "CRITICAL (严重)") {
+			t.Errorf("status %q lost severity: %q", status, card["text"])
+		}
+	}
+}

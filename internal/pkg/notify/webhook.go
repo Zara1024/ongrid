@@ -166,7 +166,7 @@ func formatFeishuCard(msg Message) map[string]any {
 	// substrings like "unresolved" or service names like "systemd-resolved".
 	statusLower := strings.ToLower(strings.TrimSpace(msg.Labels["status"]))
 	isResolved := statusLower == "resolved"
-	isActive := statusLower == "" || statusLower == "open" || statusLower == "firing"
+	isActive := statusLower == "open" || statusLower == "firing"
 
 	if isResolved {
 		colorTemplate = "green"
@@ -426,9 +426,22 @@ func formatDingTalkMessage(msg Message) map[string]any {
 	// substrings like "unresolved" or service names like "systemd-resolved".
 	statusLower := strings.ToLower(strings.TrimSpace(msg.Labels["status"]))
 	isResolved := statusLower == "resolved"
-	isActive := statusLower == "" || statusLower == "open" || statusLower == "firing"
+	isActive := statusLower == "open" || statusLower == "firing"
 
 	var sevColor, statusColor, sevText, statusText string
+
+	switch strings.ToLower(strings.TrimSpace(string(msg.Severity))) {
+	case "critical", "fatal", "emergency", "high", "p0", "p1":
+		sevColor, sevText = "#EA3323", "CRITICAL (严重)"
+	case "warning", "warn", "medium", "p2":
+		sevColor, sevText = "#FF7700", "WARNING (警告)"
+	case "info", "notice", "low", "p3":
+		sevColor, sevText = "#1E80FF", "INFO (信息)"
+	default:
+		if s := strings.TrimSpace(string(msg.Severity)); s != "" {
+			sevColor, sevText = "#888888", strings.ToUpper(s)
+		}
+	}
 
 	if isResolved {
 		prefix = "✅【告警恢复】"
@@ -446,24 +459,13 @@ func formatDingTalkMessage(msg Message) map[string]any {
 		switch strings.ToLower(strings.TrimSpace(string(msg.Severity))) {
 		case "critical", "fatal", "emergency", "high", "p0", "p1":
 			prefix = "🚨【严重告警】"
-			sevColor = "#EA3323"
-			sevText = "CRITICAL (严重)"
 		case "warning", "warn", "medium", "p2":
 			prefix = "⚠️【预警提示】"
-			sevColor = "#FF7700"
-			sevText = "WARNING (警告)"
 		case "info", "notice", "low", "p3":
 			prefix = "ℹ️【通知提醒】"
-			sevColor = "#1E80FF"
-			sevText = "INFO (信息)"
 		default:
 			prefix = "🔔【系统通知】"
-			sevColor = "#888888"
-			if s := strings.TrimSpace(string(msg.Severity)); s != "" {
-				sevText = strings.ToUpper(s)
-			}
 		}
-
 		// Domain active status is "open"; "firing" is legacy / event-type label.
 		if isActive {
 			statusColor = "#EA3323"
