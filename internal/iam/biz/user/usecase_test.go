@@ -181,3 +181,63 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 		t.Fatalf("want ErrConflict, got %v", err)
 	}
 }
+
+func TestRegister_InvalidEmailFormat(t *testing.T) {
+	uc := newTestUsecase(t)
+	ctx := context.Background()
+
+	invalidEmails := []string{"not-an-email", "@example.com", "user@", "user@.com", "user@com"}
+	for _, email := range invalidEmails {
+		_, err := uc.Register(ctx, email, "validpass123", model.RoleUser)
+		if !errors.Is(err, errs.ErrInvalid) {
+			t.Errorf("Register(%q): want ErrInvalid, got %v", email, err)
+		}
+	}
+}
+
+func TestCreate_EmailAndPhoneValidation(t *testing.T) {
+	uc := newTestUsecase(t)
+	ctx := context.Background()
+
+	// Invalid email
+	_, err := uc.Create(ctx, CreateInput{
+		Email:    "bad-email",
+		Password: "password123",
+	})
+	if !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("Create with invalid email: want ErrInvalid, got %v", err)
+	}
+
+	// Invalid phone
+	_, err = uc.Create(ctx, CreateInput{
+		Email:    "valid@example.com",
+		Password: "password123",
+		Phone:    "not-a-phone-number",
+	})
+	if !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("Create with invalid phone: want ErrInvalid, got %v", err)
+	}
+
+	// Valid email and phone
+	u, err := uc.Create(ctx, CreateInput{
+		Email:    "valid@example.com",
+		Password: "password123",
+		Phone:    "+8613800138000",
+	})
+	if err != nil {
+		t.Fatalf("Create with valid email and phone: %v", err)
+	}
+	if u.Email != "valid@example.com" {
+		t.Errorf("email = %q, want valid@example.com", u.Email)
+	}
+
+	// Invalid phone in UpdateProfile
+	if err := uc.UpdateProfile(ctx, u.ID, "New Name", "invalid-phone"); !errors.Is(err, errs.ErrInvalid) {
+		t.Errorf("UpdateProfile with invalid phone: want ErrInvalid, got %v", err)
+	}
+
+	// Valid phone in UpdateProfile
+	if err := uc.UpdateProfile(ctx, u.ID, "New Name", "+12025550123"); err != nil {
+		t.Errorf("UpdateProfile with valid phone: %v", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,25 @@ import (
 	"github.com/ongridio/ongrid/internal/pkg/auth"
 	"github.com/ongridio/ongrid/internal/pkg/errs"
 )
+
+var (
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	phoneRegex = regexp.MustCompile(`^(?:\+?86)?1[3-9]\d{9}$|^\+[1-9]\d{6,14}$`)
+)
+
+func validateEmail(email string) bool {
+	if len(email) < 3 || len(email) > 254 {
+		return false
+	}
+	return emailRegex.MatchString(email)
+}
+
+func validatePhone(phone string) bool {
+	if phone == "" {
+		return true
+	}
+	return phoneRegex.MatchString(phone)
+}
 
 // Usecase is the iam/user biz facade. It owns the authentication flows and
 // the admin-side user management operations.
@@ -44,6 +64,9 @@ func (u *Usecase) Register(ctx context.Context, email, password, role string) (*
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" || password == "" {
 		return nil, fmt.Errorf("%w: email and password required", errs.ErrInvalid)
+	}
+	if !validateEmail(email) {
+		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
 	}
 	if role == "" {
 		role = model.RoleUser
@@ -217,6 +240,9 @@ func (u *Usecase) UpdateProfile(ctx context.Context, id uint64, displayName, pho
 	if len(phone) > 32 {
 		return fmt.Errorf("%w: phone too long (max 32)", errs.ErrInvalid)
 	}
+	if phone != "" && !validatePhone(phone) {
+		return fmt.Errorf("%w: invalid phone format", errs.ErrInvalid)
+	}
 	return u.repo.UpdateProfile(ctx, id, displayName, phone)
 }
 
@@ -265,6 +291,13 @@ func (u *Usecase) Create(ctx context.Context, in CreateInput) (*model.User, erro
 	email := strings.TrimSpace(strings.ToLower(in.Email))
 	if email == "" {
 		return nil, fmt.Errorf("%w: email required", errs.ErrInvalid)
+	}
+	if !validateEmail(email) {
+		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
+	}
+	phone := strings.TrimSpace(in.Phone)
+	if phone != "" && !validatePhone(phone) {
+		return nil, fmt.Errorf("%w: invalid phone format", errs.ErrInvalid)
 	}
 	if in.Password == "" {
 		return nil, fmt.Errorf("%w: password required", errs.ErrInvalid)
