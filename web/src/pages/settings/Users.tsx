@@ -469,6 +469,22 @@ function MenuItem({
 
 // ---------- modals -----------------------------------------------------------
 
+const EMAIL_RE = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+const PHONE_RE = /^(?:\+?86)?1[3-9]\d{9}$|^\+[1-9]\d{6,14}$/;
+
+export function isValidEmail(email: string): boolean {
+  return EMAIL_RE.test(email.trim());
+}
+
+export function isValidPhone(phone: string): boolean {
+  const p = phone.trim();
+  return !p || PHONE_RE.test(p);
+}
+
+export function isValidPassword(password: string): boolean {
+  return Array.from(password.trim()).length >= 8;
+}
+
 function CreateUserModal({
   open,
   onClose,
@@ -499,10 +515,27 @@ function CreateUserModal({
     }
   }, [open]);
 
-  const canSubmit = email.trim() && password.trim() && displayName.trim() && !busy;
+  const isEmailFormatValid = isValidEmail(email);
+  const isPhoneFormatValid = isValidPhone(phone);
+  const isPasswordLengthValid = isValidPassword(password);
+  const canSubmit = isEmailFormatValid && isPasswordLengthValid && displayName.trim() && isPhoneFormatValid && !busy;
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      if (!isEmailFormatValid) {
+        setErr(tr('请输入有效的邮箱地址（例如 user@example.com）', 'Please enter a valid email address (e.g. user@example.com)'));
+        return;
+      }
+      if (!isPasswordLengthValid) {
+        setErr(tr('初始密码至少 8 位', 'Password must be at least 8 characters'));
+        return;
+      }
+      if (!isPhoneFormatValid) {
+        setErr(tr('请输入有效的手机号码（支持11位手机号或带国家码格式）', 'Please enter a valid phone number'));
+        return;
+      }
+      return;
+    }
     setErr(null);
     setBusy(true);
     try {
@@ -559,16 +592,31 @@ function CreateUserModal({
             }}
             placeholder="user@example.com"
           />
+          {email.trim() && !isEmailFormatValid && (
+            <p className="mt-1 text-[11px] text-red-400">
+              {tr('邮箱格式不正确，请输入形如 user@example.com 的合法邮箱', 'Invalid email format, please enter a valid email like user@example.com')}
+            </p>
+          )}
         </Field>
         <Field label={tr('初始密码', 'Initial password')} required hint={tr('管理员设置；创建后通过安全渠道告知该用户', 'You set this here; deliver it to the user through a secure channel')}>
           <Input className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('至少 8 位', '8+ chars')} />
+          {password && !isPasswordLengthValid && (
+            <p className="mt-1 text-[11px] text-amber-400">
+              {tr('密码长度不足，至少需要 8 个字符', 'Password must be at least 8 characters')}
+            </p>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={tr('显示名', 'Display name')} required hint={tr('UI 上展示的名称；空时会自动用邮箱前段', 'Shown in UI; auto-filled from email local-part when blank')}>
             <Input className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field>
           <Field label={tr('手机', 'Phone')}>
-            <Input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={tr('选填，如 13800138000', 'Optional, e.g. 13800138000')} />
+            {phone.trim() && !isPhoneFormatValid && (
+              <p className="mt-1 text-[11px] text-red-400">
+                {tr('手机号格式不正确（支持11位手机号或带国家码）', 'Invalid phone number')}
+              </p>
+            )}
           </Field>
         </div>
         <Field
@@ -618,14 +666,22 @@ function EditUserModal({
     }
   }, [target]);
 
+  const isPhoneFormatValid = isValidPhone(phone);
+  const canSave = isPhoneFormatValid && !busy;
+
   const submit = async () => {
-    if (!target) return;
+    if (!target || !canSave) {
+      if (!isPhoneFormatValid) {
+        setErr(tr('请输入有效的手机号码（支持11位手机号或带国家码格式）', 'Please enter a valid phone number'));
+      }
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
       const u = await patchUser(target.id, {
         display_name: displayName,
-        phone,
+        phone: phone.trim(),
       });
       onSaved(u);
     } catch (e) {
@@ -644,7 +700,7 @@ function EditUserModal({
       footer={
         <>
           <Button onClick={onClose}>{tr('取消', 'Cancel')}</Button>
-          <Button variant="primary" onClick={submit} disabled={busy}>
+          <Button variant="primary" onClick={submit} disabled={!canSave}>
             {busy ? <Loader2 size={12} className="animate-spin" /> : <UserCog size={12} />}
             {tr('保存', 'Save')}
           </Button>
@@ -656,7 +712,12 @@ function EditUserModal({
           <Input className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </Field>
         <Field label={tr('手机', 'Phone')}>
-          <Input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={tr('选填，如 13800138000', 'Optional, e.g. 13800138000')} />
+          {phone.trim() && !isPhoneFormatValid && (
+            <p className="mt-1 text-[11px] text-red-400">
+              {tr('手机号格式不正确（支持11位手机号或带国家码）', 'Invalid phone number')}
+            </p>
+          )}
         </Field>
         {err && <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">{err}</div>}
       </div>
@@ -686,8 +747,14 @@ function ResetPasswordModal({
     }
   }, [target]);
 
+  const isPasswordLengthValid = isValidPassword(pw);
+
   const submit = async () => {
-    if (!target || !pw.trim()) return;
+    if (!target) return;
+    if (!isPasswordLengthValid) {
+      setErr(tr('密码长度不足，至少需要 8 个字符', 'Password must be at least 8 characters'));
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -709,7 +776,7 @@ function ResetPasswordModal({
       footer={
         <>
           <Button onClick={onClose}>{tr('取消', 'Cancel')}</Button>
-          <Button variant="primary" onClick={submit} disabled={busy || !pw.trim()}>
+          <Button variant="primary" onClick={submit} disabled={busy || !isPasswordLengthValid}>
             {busy ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />}
             {tr('重置', 'Reset')}
           </Button>
@@ -719,6 +786,11 @@ function ResetPasswordModal({
       <div className="space-y-3">
         <Field label={tr('新密码', 'New password')} required hint={tr('设置后请通过安全渠道告知用户', 'After setting, deliver it to the user through a secure channel')}>
           <Input className={inputClass} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={tr('至少 8 位', '8+ chars')} />
+          {pw && !isPasswordLengthValid && (
+            <p className="mt-1 text-[11px] text-amber-400">
+              {tr('密码长度不足，至少需要 8 个字符', 'Password must be at least 8 characters')}
+            </p>
+          )}
         </Field>
         {err && <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">{err}</div>}
       </div>

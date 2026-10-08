@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 
@@ -14,6 +16,27 @@ import (
 	"github.com/ongridio/ongrid/internal/pkg/auth"
 	"github.com/ongridio/ongrid/internal/pkg/errs"
 )
+
+const minPasswordLength = 8
+
+var (
+	emailRegex = regexp.MustCompile("^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$")
+	phoneRegex = regexp.MustCompile(`^(?:\+?86)?1[3-9]\d{9}$|^\+[1-9]\d{6,14}$`)
+)
+
+func validateEmail(email string) bool {
+	if len(email) < 3 || len(email) > 254 {
+		return false
+	}
+	return emailRegex.MatchString(email)
+}
+
+func validatePhone(phone string) bool {
+	if phone == "" {
+		return true
+	}
+	return phoneRegex.MatchString(phone)
+}
 
 // Usecase is the iam/user biz facade. It owns the authentication flows and
 // the admin-side user management operations.
@@ -44,6 +67,12 @@ func (u *Usecase) Register(ctx context.Context, email, password, role string) (*
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" || password == "" {
 		return nil, fmt.Errorf("%w: email and password required", errs.ErrInvalid)
+	}
+	if !validateEmail(email) {
+		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
+	}
+	if utf8.RuneCountInString(password) < minPasswordLength {
+		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	if role == "" {
 		role = model.RoleUser
@@ -217,6 +246,9 @@ func (u *Usecase) UpdateProfile(ctx context.Context, id uint64, displayName, pho
 	if len(phone) > 32 {
 		return fmt.Errorf("%w: phone too long (max 32)", errs.ErrInvalid)
 	}
+	if phone != "" && !validatePhone(phone) {
+		return fmt.Errorf("%w: invalid phone format", errs.ErrInvalid)
+	}
 	return u.repo.UpdateProfile(ctx, id, displayName, phone)
 }
 
@@ -240,6 +272,9 @@ func (u *Usecase) SetStatus(ctx context.Context, id uint64, status string) error
 func (u *Usecase) ResetPassword(ctx context.Context, id uint64, newPassword string) error {
 	if newPassword == "" {
 		return fmt.Errorf("%w: password required", errs.ErrInvalid)
+	}
+	if utf8.RuneCountInString(newPassword) < minPasswordLength {
+		return fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	ph, err := hashPassword(newPassword)
 	if err != nil {
@@ -266,8 +301,18 @@ func (u *Usecase) Create(ctx context.Context, in CreateInput) (*model.User, erro
 	if email == "" {
 		return nil, fmt.Errorf("%w: email required", errs.ErrInvalid)
 	}
+	if !validateEmail(email) {
+		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
+	}
+	phone := strings.TrimSpace(in.Phone)
+	if phone != "" && !validatePhone(phone) {
+		return nil, fmt.Errorf("%w: invalid phone format", errs.ErrInvalid)
+	}
 	if in.Password == "" {
 		return nil, fmt.Errorf("%w: password required", errs.ErrInvalid)
+	}
+	if utf8.RuneCountInString(in.Password) < minPasswordLength {
+		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	role := in.Role
 	if role == "" {
