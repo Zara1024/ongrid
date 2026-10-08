@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import SettingsUsers, { isValidEmail } from './Users';
+import SettingsUsers, { isValidEmail, isValidPassword } from './Users';
 import { server } from '@/test/msw-server';
 
 vi.mock('@/store/me', () => ({
@@ -126,8 +126,18 @@ describe('SettingsUsers', () => {
     // Initially empty -> disabled
     expect(submitBtn).toBeDisabled();
 
-    // Less than 8 characters -> disabled and shows hint
+    // Less than 8 characters (ASCII or Chinese) -> disabled and shows hint
     fireEvent.change(pwInput, { target: { value: 'short' } });
+    expect(submitBtn).toBeDisabled();
+    expect(screen.getByText(/密码长度不足，至少需要 8 个字符/i)).toBeInTheDocument();
+
+    // Chinese password with only 3 characters (9 UTF-8 bytes) -> must be rejected
+    fireEvent.change(pwInput, { target: { value: '密码短' } });
+    expect(submitBtn).toBeDisabled();
+    expect(screen.getByText(/密码长度不足，至少需要 8 个字符/i)).toBeInTheDocument();
+
+    // Emoji password with only 3 code points -> must be rejected
+    fireEvent.change(pwInput, { target: { value: '🔑🔑🔑' } });
     expect(submitBtn).toBeDisabled();
     expect(screen.getByText(/密码长度不足，至少需要 8 个字符/i)).toBeInTheDocument();
 
@@ -142,6 +152,26 @@ describe('SettingsUsers', () => {
       expect(resetPasswordPayload).not.toBeNull();
     });
     expect(resetPasswordPayload).toEqual({ password: 'password123' });
+  });
+
+  describe('Password length validation (Unicode code points)', () => {
+    it('rejects passwords shorter than 8 Unicode characters across ASCII, Chinese, and Emojis', () => {
+      expect(isValidPassword('1')).toBe(false);
+      expect(isValidPassword('1234567')).toBe(false);
+      expect(isValidPassword('short')).toBe(false);
+      expect(isValidPassword('密码短')).toBe(false); // 3 code points, 9 UTF-8 bytes
+      expect(isValidPassword('密码六个字')).toBe(false); // 5 code points
+      expect(isValidPassword('七个字符的密码')).toBe(false); // 7 code points
+      expect(isValidPassword('🔑🔑🔑')).toBe(false); // 3 emojis
+      expect(isValidPassword('🔑🔑🔑🔑🔑🔑🔑')).toBe(false); // 7 emojis
+    });
+
+    it('accepts passwords with 8 or more Unicode characters across ASCII, Chinese, and Emojis', () => {
+      expect(isValidPassword('password123')).toBe(true);
+      expect(isValidPassword('密码至少八个字符')).toBe(true); // 8 Chinese characters
+      expect(isValidPassword('这是一段足够长的安全密码')).toBe(true); // 11 Chinese characters
+      expect(isValidPassword('🔑🔑🔑🔑🔑🔑🔑🔑')).toBe(true); // 8 emojis
+    });
   });
 
   describe('RFC 5322 email regex validation', () => {

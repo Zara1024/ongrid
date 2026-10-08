@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 
@@ -70,7 +71,7 @@ func (u *Usecase) Register(ctx context.Context, email, password, role string) (*
 	if !validateEmail(email) {
 		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
 	}
-	if len(password) < minPasswordLength {
+	if utf8.RuneCountInString(password) < minPasswordLength {
 		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	if role == "" {
@@ -272,7 +273,7 @@ func (u *Usecase) ResetPassword(ctx context.Context, id uint64, newPassword stri
 	if newPassword == "" {
 		return fmt.Errorf("%w: password required", errs.ErrInvalid)
 	}
-	if len(newPassword) < minPasswordLength {
+	if utf8.RuneCountInString(newPassword) < minPasswordLength {
 		return fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	ph, err := hashPassword(newPassword)
@@ -310,7 +311,7 @@ func (u *Usecase) Create(ctx context.Context, in CreateInput) (*model.User, erro
 	if in.Password == "" {
 		return nil, fmt.Errorf("%w: password required", errs.ErrInvalid)
 	}
-	if len(in.Password) < minPasswordLength {
+	if utf8.RuneCountInString(in.Password) < minPasswordLength {
 		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	role := in.Role

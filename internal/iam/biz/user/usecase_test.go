@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -173,10 +174,10 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 	uc := newTestUsecase(t)
 	ctx := context.Background()
 
-	if _, err := uc.Register(ctx, "a@example.com", "pw-aaaa", model.RoleUser); err != nil {
+	if _, err := uc.Register(ctx, "a@example.com", "password-aaaa", model.RoleUser); err != nil {
 		t.Fatalf("first register: %v", err)
 	}
-	_, err := uc.Register(ctx, "a@example.com", "pw-bbbb", model.RoleUser)
+	_, err := uc.Register(ctx, "a@example.com", "password-bbbb", model.RoleUser)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("want ErrConflict, got %v", err)
 	}
@@ -228,7 +229,14 @@ func TestPasswordLengthPolicy(t *testing.T) {
 	uc := newTestUsecase(t)
 	ctx := context.Background()
 
-	shortPasswords := []string{"1", "1234567", "a", "short"}
+	shortPasswords := []string{
+		"1", "1234567", "a", "short",
+		"密码短",        // 3 Unicode characters, but 9 UTF-8 bytes
+		"密码六个字",      // 5 Unicode characters
+		"七个字符的密码",    // 7 Unicode characters
+		"🔑🔑🔑",         // 3 emojis, 12 UTF-8 bytes
+		"🔑🔑🔑🔑🔑🔑🔑",     // 7 emojis, 28 UTF-8 bytes
+	}
 	for _, pw := range shortPasswords {
 		// Register rejects short passwords
 		_, err := uc.Register(ctx, "reg@example.com", pw, model.RoleUser)
@@ -265,6 +273,22 @@ func TestPasswordLengthPolicy(t *testing.T) {
 	// Valid reset password succeeds
 	if err := uc.ResetPassword(ctx, u.ID, "newvalidpw123"); err != nil {
 		t.Errorf("ResetPassword with valid password: %v", err)
+	}
+
+	// Valid non-ASCII passwords with 8+ runes succeed
+	validNonAscii := []string{
+		"密码至少八个字符",     // 8 Chinese characters
+		"这是一段足够长的安全密码", // 11 Chinese characters
+		"🔑🔑🔑🔑🔑🔑🔑🔑",   // 8 emojis, 32 UTF-8 bytes
+	}
+	for i, pw := range validNonAscii {
+		email := fmt.Sprintf("nonascii-%d@example.com", i)
+		if _, err := uc.Register(ctx, email, pw, model.RoleUser); err != nil {
+			t.Errorf("Register with valid non-ASCII password %q: unexpected error %v", pw, err)
+		}
+		if err := uc.ResetPassword(ctx, u.ID, pw); err != nil {
+			t.Errorf("ResetPassword with valid non-ASCII password %q: unexpected error %v", pw, err)
+		}
 	}
 }
 

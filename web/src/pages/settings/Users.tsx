@@ -481,6 +481,10 @@ export function isValidPhone(phone: string): boolean {
   return !p || PHONE_RE.test(p);
 }
 
+export function isValidPassword(password: string): boolean {
+  return Array.from(password.trim()).length >= 8;
+}
+
 function CreateUserModal({
   open,
   onClose,
@@ -513,7 +517,7 @@ function CreateUserModal({
 
   const isEmailFormatValid = isValidEmail(email);
   const isPhoneFormatValid = isValidPhone(phone);
-  const isPasswordLengthValid = password.trim().length >= 8;
+  const isPasswordLengthValid = isValidPassword(password);
   const canSubmit = isEmailFormatValid && isPasswordLengthValid && displayName.trim() && isPhoneFormatValid && !busy;
 
   const submit = async () => {
@@ -743,7 +747,7 @@ function ResetPasswordModal({
     }
   }, [target]);
 
-  const isPasswordLengthValid = pw.trim().length >= 8;
+  const isPasswordLengthValid = isValidPassword(pw);
 
   const submit = async () => {
     if (!target) return;
