@@ -182,16 +182,89 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 	}
 }
 
-func TestRegister_InvalidEmailFormat(t *testing.T) {
+func TestRegister_EmailFormat(t *testing.T) {
 	uc := newTestUsecase(t)
 	ctx := context.Background()
 
-	invalidEmails := []string{"not-an-email", "@example.com", "user@", "user@.com", "user@com"}
+	// Valid emails including apostrophe per RFC 5322 §3.2.3
+	validEmails := []string{
+		"o'connor@example.com",
+		"user.name@example.com",
+		"user+tag@example.com",
+	}
+	for _, email := range validEmails {
+		u, err := uc.Register(ctx, email, "validpass123", model.RoleUser)
+		if err != nil {
+			t.Errorf("Register(%q): unexpected error: %v", email, err)
+		}
+		if u == nil || u.Email != email {
+			t.Errorf("Register(%q): expected user email %q", email, email)
+		}
+	}
+
+	// Invalid emails: consecutive dots, leading/trailing dots, malformed domain
+	invalidEmails := []string{
+		"not-an-email",
+		"@example.com",
+		"user@",
+		"user@.com",
+		"user@com",
+		"first..last@example.com",
+		"user@example..com",
+		"user@-example.com",
+		"user@example-.com",
+		".user@example.com",
+		"user.@example.com",
+	}
 	for _, email := range invalidEmails {
 		_, err := uc.Register(ctx, email, "validpass123", model.RoleUser)
 		if !errors.Is(err, errs.ErrInvalid) {
 			t.Errorf("Register(%q): want ErrInvalid, got %v", email, err)
 		}
+	}
+}
+
+func TestPasswordLengthPolicy(t *testing.T) {
+	uc := newTestUsecase(t)
+	ctx := context.Background()
+
+	shortPasswords := []string{"1", "1234567", "a", "short"}
+	for _, pw := range shortPasswords {
+		// Register rejects short passwords
+		_, err := uc.Register(ctx, "reg@example.com", pw, model.RoleUser)
+		if !errors.Is(err, errs.ErrInvalid) {
+			t.Errorf("Register with password %q: want ErrInvalid, got %v", pw, err)
+		}
+
+		// Create rejects short passwords
+		_, err = uc.Create(ctx, CreateInput{
+			Email:    "create@example.com",
+			Password: pw,
+		})
+		if !errors.Is(err, errs.ErrInvalid) {
+			t.Errorf("Create with password %q: want ErrInvalid, got %v", pw, err)
+		}
+	}
+
+	// Create user with valid password for testing ResetPassword
+	u, err := uc.Create(ctx, CreateInput{
+		Email:    "reset@example.com",
+		Password: "validpassword123",
+	})
+	if err != nil {
+		t.Fatalf("Create user for reset: %v", err)
+	}
+
+	for _, pw := range shortPasswords {
+		err := uc.ResetPassword(ctx, u.ID, pw)
+		if !errors.Is(err, errs.ErrInvalid) {
+			t.Errorf("ResetPassword with password %q: want ErrInvalid, got %v", pw, err)
+		}
+	}
+
+	// Valid reset password succeeds
+	if err := uc.ResetPassword(ctx, u.ID, "newvalidpw123"); err != nil {
+		t.Errorf("ResetPassword with valid password: %v", err)
 	}
 }
 
@@ -239,5 +312,17 @@ func TestCreate_EmailAndPhoneValidation(t *testing.T) {
 	// Valid phone in UpdateProfile
 	if err := uc.UpdateProfile(ctx, u.ID, "New Name", "+12025550123"); err != nil {
 		t.Errorf("UpdateProfile with valid phone: %v", err)
+	}
+
+	// Clear phone in UpdateProfile
+	if err := uc.UpdateProfile(ctx, u.ID, "New Name", ""); err != nil {
+		t.Errorf("UpdateProfile with empty phone: %v", err)
+	}
+	updated, err := uc.GetByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("GetByID after clearing phone: %v", err)
+	}
+	if updated.Phone != "" {
+		t.Errorf("phone = %q, want empty string", updated.Phone)
 	}
 }

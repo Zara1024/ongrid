@@ -16,8 +16,10 @@ import (
 	"github.com/ongridio/ongrid/internal/pkg/errs"
 )
 
+const minPasswordLength = 8
+
 var (
-	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	emailRegex = regexp.MustCompile("^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$")
 	phoneRegex = regexp.MustCompile(`^(?:\+?86)?1[3-9]\d{9}$|^\+[1-9]\d{6,14}$`)
 )
 
@@ -67,6 +69,9 @@ func (u *Usecase) Register(ctx context.Context, email, password, role string) (*
 	}
 	if !validateEmail(email) {
 		return nil, fmt.Errorf("%w: invalid email format", errs.ErrInvalid)
+	}
+	if len(password) < minPasswordLength {
+		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	if role == "" {
 		role = model.RoleUser
@@ -267,6 +272,9 @@ func (u *Usecase) ResetPassword(ctx context.Context, id uint64, newPassword stri
 	if newPassword == "" {
 		return fmt.Errorf("%w: password required", errs.ErrInvalid)
 	}
+	if len(newPassword) < minPasswordLength {
+		return fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
+	}
 	ph, err := hashPassword(newPassword)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
@@ -301,6 +309,9 @@ func (u *Usecase) Create(ctx context.Context, in CreateInput) (*model.User, erro
 	}
 	if in.Password == "" {
 		return nil, fmt.Errorf("%w: password required", errs.ErrInvalid)
+	}
+	if len(in.Password) < minPasswordLength {
+		return nil, fmt.Errorf("%w: password must be at least %d characters", errs.ErrInvalid, minPasswordLength)
 	}
 	role := in.Role
 	if role == "" {
