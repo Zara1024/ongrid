@@ -235,6 +235,11 @@ func (e *PipelineEvaluator) evaluate(ctx context.Context) {
 // inventory are deleted so the metric_raw evaluator doesn't keep firing
 // on a removed device.
 //
+// Two kinds of edge rows get no series at all, because neither has a
+// defensible "seconds since last seen": an edge that has never
+// reported a heartbeat, and an edge that is not linked to a device yet.
+// Emitting for those labels alerts on rows that no device corresponds to.
+//
 // Called every evaluator tick (30s default). Errors here are logged and
 // skipped — gauge staleness for one tick is preferable to a panic in
 // the alert loop.
@@ -250,24 +255,22 @@ func (e *PipelineEvaluator) refreshDeviceStalenessGauge(ctx context.Context, now
 	// device_id values doesn't double-up the series.
 	current := make(map[string]string, len(edges))
 	for _, edge := range edges {
-		var lastSeen time.Time
-		if edge.LastSeenAt != nil {
-			lastSeen = *edge.LastSeenAt
-		} else {
-			lastSeen = edge.CreatedAt
+		// 没有 last_seen_at 表示这个 edge 从未上报过心跳。批量录入会先建好
+		// 记录、等主机真正安装 edge 后才开始心跳；用 created_at 兜底会让它
+		// 一出生就超过阈值，立刻误报 device_offline。
+		if edge.LastSeenAt == nil {
+			continue
 		}
-		secs := now.Sub(lastSeen).Seconds()
+		// 序列标签是 device_id。未绑定设备时退回 edge.ID 会伪造出一个
+		// devices 表里并不存在的设备号，告警也就无法对应到任何设备。
+		if edge.DeviceID == nil || *edge.DeviceID == 0 {
+			continue
+		}
+		secs := now.Sub(*edge.LastSeenAt).Seconds()
 		if secs < 0 {
 			secs = 0
 		}
-		// Numeric device_id: prefer Edge.DeviceID (the host device's id);
-		// fall back to edge.ID before the register flow has linked them
-		// (idempotent because the backfill makes the values match).
-		var deviceID uint64 = edge.ID
-		if edge.DeviceID != nil && *edge.DeviceID != 0 {
-			deviceID = *edge.DeviceID
-		}
-		idStr := fmt.Sprintf("%d", deviceID)
+		idStr := fmt.Sprintf("%d", *edge.DeviceID)
 		prom.SetDeviceLastSeenSecondsAgo(idStr, edge.Name, secs)
 		current[idStr] = edge.Name
 	}

@@ -6,7 +6,7 @@ import { Hint } from '@/components/ui/Tooltip';
 import { Select } from '@/components/ui/Select';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, RefreshCw, Settings2 } from 'lucide-react';
 import {
   CartesianGrid,
   Line,
@@ -28,6 +28,7 @@ import {
   type ApmOverview,
   type ApmDependencies,
   type ApmRuntime,
+  type ApmSummary,
 } from '@/api/apm';
 import { Button, Card, Chip, EmptyState, PageHeader, PaginationFooter } from '@/components/ui';
 import { ServiceMap } from '@/components/apm/ServiceMap';
@@ -37,11 +38,11 @@ import { ErrorGroups } from '@/components/apm/ErrorGroups';
 import { VersionComparison } from '@/components/apm/VersionComparison';
 import { ServiceLogs } from '@/components/apm/ServiceLogs';
 import { RepositoryBindingButton } from '@/components/apm/RepositoryBinding';
+import { ServiceSetup } from '@/components/apm/ServiceSetup';
 import { SearchInput } from '@/components/apm/SearchInput';
 import { ServiceSwitcher } from '@/components/apm/ServiceSwitcher';
 import { RuntimeMetrics } from '@/components/apm/RuntimeMetrics';
 import { InstrumentationDiagnostics } from '@/components/apm/InstrumentationDiagnostics';
-import { Onboarding } from '@/components/apm/Onboarding';
 import { chartTooltipStyle, chartTooltipLabelStyle } from '@/lib/chartTheme';
 import { useI18n } from '@/i18n/locale';
 import { usePermissions } from '@/store/me';
@@ -90,6 +91,7 @@ export default function ApmPage() {
   const initialWindow = useRef(true);
   const [params, setParams] = useSearchParams();
   const [refresh, setRefresh] = useState(0);
+  const [setupService, setSetupService] = useState<ApmSummary>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resourceOptions, setResourceOptions] = useState<Record<string, { value: string; label: string }[]>>({});
@@ -115,11 +117,10 @@ export default function ApmPage() {
   const detail = params.has('service_name');
   const requestedTab = params.get('tab') || (detail ? 'overview' : 'services');
   const tab =
-    !detail && requestedTab === 'onboarding' && params.has('capture_edge_id') ? 'discovery' :
     requestedTab === 'runtime'
       ? 'instances'
-      : requestedTab === 'diagnostics'
-        ? 'onboarding'
+      : ['onboarding', 'diagnostics'].includes(requestedTab)
+        ? detail ? 'diagnostics' : 'discovery'
         : requestedTab;
   const period = params.get('range') || 'custom';
   const query = params.toString();
@@ -136,10 +137,11 @@ export default function ApmPage() {
     context.delete('end');
   }
   const scope = context.toString();
-  // Discovery options survive result refreshes, but never cross service/device scope.
+  // Discovery options survive refreshes, but never cross identity or time windows.
   const optionScope = JSON.stringify([
     detail ? ['service_name', 'service_namespace', 'environment'].map((key) => params.get(key)) : null,
     ...['device_id', 'cluster_id', 'cluster_node_id', 'metric_source'].map((key) => params.get(key)),
+    period, ...(period === 'custom' ? ['start', 'end'].map((key) => params.get(key)) : []),
   ]);
   const [filterOptions, setFilterOptions] = useState<{
     scope: string;
@@ -216,7 +218,7 @@ export default function ApmPage() {
   };
   usePoll(() => {
     if (!loading) pickPeriod(period, true);
-  }, 30_000, periods.some(([key]) => key === period) && !['onboarding', 'discovery', 'alerts', 'errors'].includes(tab));
+  }, 30_000, !setupService && periods.some(([key]) => key === period) && !['diagnostics', 'discovery', 'alerts', 'errors'].includes(tab));
   useEffect(() => {
     const next = new URLSearchParams(params);
     const duration = periods.find(([key]) => key === params.get('range'))?.[1];
@@ -239,7 +241,7 @@ export default function ApmPage() {
     setLoading(false);
     setError('');
     setResults((previous) => (previous.scope === scope ? previous : { scope }));
-    if (!p.has('start') || !p.has('end') || tab === 'alerts' || (!detail && ['onboarding', 'discovery'].includes(tab)))
+    if (!p.has('start') || !p.has('end') || tab === 'alerts' || (!detail && tab === 'discovery'))
       return;
     const controller = new AbortController();
     setLoading(true);
@@ -320,7 +322,7 @@ export default function ApmPage() {
         fetchPanel(queryApm('dependencies', p, controller.signal), 'dependencies');
     } else if (tab === 'dependencies' && !scopedReplica)
       fetchPanel(queryApm('dependencies', p, controller.signal), 'dependencies');
-    if (detail && tab !== 'alerts' && tab !== 'onboarding')
+    if (detail && tab !== 'alerts' && tab !== 'diagnostics')
       fetchPanel(queryApm(tab === 'instances' ? 'runtime' : 'instances', p, controller.signal), 'runtime');
     Promise.all(tasks).finally(() => {
       if (!controller.signal.aborted) {
@@ -483,7 +485,7 @@ export default function ApmPage() {
   </>;
 
   const timeControls = (
-    (detail || !['discovery', 'onboarding'].includes(tab)) && <>
+    (detail || tab !== 'discovery') && <>
       <span role="status" className="text-xs text-zinc-500">
         {loading
           ? tr('正在更新…', 'Updating…')
@@ -619,7 +621,7 @@ export default function ApmPage() {
         }
         className="shrink-0 [&_h1]:break-all"
         navigation={!detail ? <TabsList activateOnFocus={false} aria-label={tr('服务视图', 'Service views')} className="shrink-0">
-        {[['services', tr('服务列表', 'Service list')], ['map', tr('服务地图', 'Service map')], ['discovery', tr('服务发现', 'Service discovery')], ['onboarding', tr('接入指南', 'Setup guide')]].map(([value, label]) => <TabsTrigger key={value} value={value} onClick={() => set('tab', value)}>{label}</TabsTrigger>)}
+        {[['services', tr('服务列表', 'Service list')], ['map', tr('服务地图', 'Service map')], ['discovery', tr('服务发现', 'Service discovery')]].map(([value, label]) => <TabsTrigger key={value} value={value} onClick={() => set('tab', value)}>{label}</TabsTrigger>)}
       </TabsList> : (
         <TabsList activateOnFocus={false}
           aria-label={tr('服务视图', 'Service views')}
@@ -635,9 +637,9 @@ export default function ApmPage() {
             <Button variant="subtle" size="sm"
               type="button"
               className=""
-              onClick={() => set('tab', 'onboarding')}
+              onClick={() => set('tab', 'diagnostics')}
             >
-              {tr('接入管理', 'Instrumentation')}
+              {tr('采集诊断', 'Collection diagnostics')}
             </Button>
           </div>
         </TabsList>
@@ -650,7 +652,7 @@ export default function ApmPage() {
             <div className="ml-auto flex flex-wrap items-center gap-2">{timeControls}</div>
           </div>
         )}
-        {!detail && tab === 'discovery' && <AutoAPMManagement canEdit={isAdmin} initialEdgeId={params.get('capture_edge_id')} initialScope={params.get('discovery_scope')} />}
+        {!detail && tab === 'discovery' && <AutoAPMManagement canEdit={isAdmin} initialEdgeId={params.get('capture_edge_id')} initialScope={params.get('discovery_scope') ?? (params.has('capture_edge_id') ? 'hosts' : 'kubernetes')} />}
         {!detail && tab === 'map' && (scopedReplica ? <EmptyState title={tr('服务地图按服务汇总', 'The service map is service-wide')}
           hint={tr('请清除设备、集群、版本和实例筛选后查看。', 'Clear device, cluster, version and instance filters to view the map.')}
           action={<Button onClick={() => { const next = new URLSearchParams(params); for (const key of ['device_id', 'cluster_id', 'cluster_node_id', 'service_version', 'instance_id']) next.delete(key); setParams(next); }}>{tr('清除不支持的筛选', 'Clear unsupported filters')}</Button>} />
@@ -729,7 +731,7 @@ export default function ApmPage() {
             {error}
           </Card>
         )}
-        {loading && !['map', 'discovery', 'onboarding'].includes(tab) &&
+        {loading && !['map', 'discovery', 'diagnostics'].includes(tab) &&
           !list &&
           !overview &&
           !current?.rpcList &&
@@ -740,29 +742,18 @@ export default function ApmPage() {
               {tr('正在加载当前范围的数据…', 'Loading data for the current scope…')}
             </Card>
           )}
-        {tab === 'onboarding' && (
+        {detail && tab === 'diagnostics' && (
           <>
-            {detail && <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Link
                 className="text-sm text-zinc-400 hover:underline"
                 state={location.state}
-                to={detail ? viewLink('overview') : `/apm?${back}`}
+                to={viewLink('overview')}
               >
                 ← {tr('返回指标', 'Back to metrics')}
               </Link>
-            </div>}
-            {detail ? (
-              <Tabs defaultValue="diagnostics" className="space-y-3">
-                <TabsList aria-label={tr('接入管理', 'Instrumentation management')}>
-                  <TabsTrigger value="diagnostics">{tr('接入诊断', 'Diagnostics')}</TabsTrigger>
-                  <TabsTrigger value="guide">{tr('接入指南', 'Setup guide')}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="diagnostics">
-                  <InstrumentationDiagnostics params={params} refresh={refresh} />
-                </TabsContent>
-                <TabsContent value="guide"><Onboarding /></TabsContent>
-              </Tabs>
-            ) : <Onboarding />}
+            </div>
+            <InstrumentationDiagnostics params={params} refresh={refresh} />
           </>
         )}
         {detail && tab === 'operations' && (
@@ -808,15 +799,6 @@ export default function ApmPage() {
                         ? tr(`接口 · ${list.total}`, `Operations · ${list.total}`)
                         : tr(`服务 · ${list.total}`, `Services · ${list.total}`)}
                     </h2>
-                    {!detail && (
-                      <Button variant="subtle" size="sm"
-                        type="button"
-                        className=""
-                        onClick={() => set('tab', 'onboarding')}
-                      >
-                        {tr('接入管理', 'Instrumentation')}
-                      </Button>
-                    )}
                   </div>
                   {list.items.length === 0 ? (
                     <EmptyState
@@ -824,27 +806,27 @@ export default function ApmPage() {
                         '当前范围未观测到服务请求指标',
                         'No request metrics observed in this scope',
                       )}
-                      hint={tr(
-                        '检查 Metrics 导出、指标格式和时间范围。',
-                        'Check Metrics export, metric format and time range.',
+                      hint={detail ? tr(
+                        '检查采集状态，或调整时间范围。',
+                        'Check collection status, or adjust the time range.',
+                      ) : tr(
+                        '检查服务发现中的采集状态，或调整时间范围。',
+                        'Check collection status in Service discovery, or adjust the time range.',
                       )}
                       action={
-                        <Button onClick={() => set('tab', 'onboarding')}>
-                          {tr('接入应用', 'Instrument application')}
+                        <Button onClick={() => set('tab', detail ? 'diagnostics' : 'discovery')}>
+                          {detail ? tr('检查采集状态', 'Check collection status') : tr('查看服务发现', 'View service discovery')}
                         </Button>
                       }
                     />
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[960px] table-fixed text-left text-sm">
-                        <colgroup>
-                          {(!detail
-                            ? ['22%', '12%', '12%', '8%', '9%', '12%', '12%', '13%']
-                            : ['45%', '14%', '14%', '14%', '13%']
-                          ).map((width, i) => (
+                      <table className={`w-full min-w-[960px] text-left text-sm${detail ? ' table-fixed' : ''}`}>
+                        {detail && <colgroup>
+                          {['45%', '14%', '14%', '14%', '13%'].map((width, i) => (
                             <col key={i} style={{ width }} />
                           ))}
-                        </colgroup>
+                        </colgroup>}
                         <thead className="border-y border-[rgb(var(--border))] bg-zinc-900/40 text-xs text-zinc-500">
                           <tr>
                             {sortHeading(
@@ -874,7 +856,7 @@ export default function ApmPage() {
                             <th className="px-4 py-3 font-normal">
                               {tr('数据状态', 'Data status')}
                             </th>
-                            {!detail && <th className="px-4 py-3 font-normal">{tr('代码仓库', 'Repository')}</th>}
+                            {!detail && <><th className="w-px whitespace-nowrap px-4 py-3 font-normal">{tr('代码仓库', 'Repository')}</th><th className="w-px whitespace-nowrap px-4 py-3 text-left font-normal">{tr('接入', 'Ingestion')}</th></>}
                           </tr>
                         </thead>
                         {list.items.map((row) => {
@@ -894,10 +876,10 @@ export default function ApmPage() {
                               className="border-b border-[rgb(var(--border))] last:border-0 hover:bg-zinc-900/40"
                             >
                               <tr>
-                                <td className="px-4 py-4 align-top">
+                                <td className="max-w-xs px-4 py-4 align-top">
                                   <div className="flex items-center gap-2">
                                     <Link
-                                      className="min-w-0 break-words font-medium text-zinc-100 hover:text-indigo-500 hover:underline"
+                                      className="min-w-0 [overflow-wrap:anywhere] font-medium text-zinc-100 hover:text-indigo-500 hover:underline"
                                       state={location.state}
                                       to={to}
                                       onClick={(event) => openService(event, to)}
@@ -922,13 +904,13 @@ export default function ApmPage() {
                                 {!detail && (
                                   <>
                                     <Hint content={row.identity.environment || unset}><td
-                                      className="truncate px-3 py-4 align-top text-zinc-400"
+                                      className="max-w-40 truncate px-3 py-4 align-top text-zinc-400"
 
                                     >
                                       {row.identity.environment || unset}
                                     </td></Hint>
                                     <Hint content={row.identity.service_namespace || unset}><td
-                                      className="truncate px-3 py-4 align-top text-zinc-400"
+                                      className="max-w-48 truncate px-3 py-4 align-top text-zinc-400"
 
                                     >
                                       {row.identity.service_namespace || unset}
@@ -966,7 +948,8 @@ export default function ApmPage() {
                                   {row.metric_source === 'tempo_spanmetrics' && row.data_status !== 'traces_only' && `${tr('Trace 样本', 'Trace samples')} · `}
                                   {status(row.data_status)}
                                 </td>
-                                {!detail && <td className="px-3 py-3"><RepositoryBindingButton identity={row.identity} canEdit={isAdmin} /></td>}
+                                {!detail && <td className="w-px whitespace-nowrap px-3 py-3"><div className="max-w-52"><RepositoryBindingButton identity={row.identity} canEdit={isAdmin} /></div></td>}
+                                {!detail && <td className="w-px whitespace-nowrap px-3 py-3"><Button variant="subtle" size="sm" aria-label={tr(`接入配置：${row.identity.service_name}`, `Ingestion configuration: ${row.identity.service_name}`)} onClick={() => setSetupService(row)}><Settings2 size={14} aria-hidden="true" />{tr('接入配置', 'Ingestion configuration')}</Button></td>}
                               </tr>
                             </tbody>
                           );
@@ -1383,6 +1366,7 @@ export default function ApmPage() {
           </Card>
         )}
       </main></TabsContent>
+      {setupService && <ServiceSetup service={setupService} params={serviceParams(params, setupService.identity, 'http')} onClose={() => setSetupService(undefined)} />}
     </div></Tabs>
   );
 }

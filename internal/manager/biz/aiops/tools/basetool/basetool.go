@@ -206,8 +206,9 @@ func WithConfirmedDeviceIDs(ids []uint64) InvokeOption {
 }
 
 // WithHostWritePermission carries the resolved admin write gate to host-side
-// tools. When enabled, host_bash uses the edge's unrestricted execution path;
-// mutating commands still require the separate approval flow.
+// tools. When enabled, host_bash may turn a mutating command into an approval
+// proposal; it never changes how a command is dispatched. Commands that do not
+// reach the approval flow still go through the edge's read-only cmdpolicy path.
 func WithHostWritePermission(allowed bool) InvokeOption {
 	return func(c *invokeConfig) { c.HostWriteAllowed = allowed }
 }

@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/ongridio/ongrid/internal/pkg/autoapm"
 	"github.com/ongridio/ongrid/internal/pkg/config"
 	"github.com/ongridio/ongrid/internal/pkg/httpserver"
 	"github.com/ongridio/ongrid/internal/pkg/logger"
@@ -279,6 +281,9 @@ func main() {
 					BatchSampleLimit: parseIntEnv("ONGRID_K8S_METRICS_BATCH_SAMPLE_LIMIT", 10000),
 					BatchByteLimit:   parseIntEnv("ONGRID_K8S_METRICS_BATCH_BYTE_LIMIT", 4<<20),
 					DiscoverApps:     appMetricsDiscovery,
+					AppMetricsScope: func(ctx context.Context) (autoapm.MetricsScope, error) {
+						return loadK8sAppMetricsScope(ctx, k8sInfo)
+					},
 				},
 				log.With(slog.String("comp", "k8s-metrics")),
 				edgek8s.WithMetricsRegisterer(reg),
@@ -339,6 +344,7 @@ func main() {
 		pluginLog := log.With(slog.String("comp", "plugins"))
 
 		var registered []edgeplugins.Plugin
+		var autoAPM *edgepluginautoapm.Plugin
 		if telemetryGatewayEnabled {
 			log.Info("kubernetes controller: telemetry gateway plugin runtime enabled",
 				slog.String("role", k8sInfo.Role),
@@ -349,6 +355,7 @@ func main() {
 			}
 		} else {
 			edgeplugindatabasemetrics.RegisterSecretHandler(client, pluginLog)
+			autoAPM = edgepluginautoapm.New(pluginBinDir, pluginWorkDir, client, agent.EdgeID, pluginLog)
 			registered = []edgeplugins.Plugin{
 				edgepluginlogs.New(pluginBinDir, pluginWorkDir, pluginLog),
 				// traces plugin: subprocess otelcol-contrib. Stays
@@ -356,7 +363,7 @@ func main() {
 				// + Endpoint set to the manager public /v1/traces URL.
 				edgeplugintraces.New(pluginBinDir, pluginWorkDir, pluginLog),
 				edgepluginprofiles.New(pluginBinDir, pluginWorkDir, pluginLog),
-				edgepluginautoapm.New(pluginBinDir, pluginWorkDir, client, agent.EdgeID, pluginLog),
+				autoAPM,
 				// metrics plugin: in-process scraper that polls a
 				// local /metrics endpoint (default node_exporter on
 				// 127.0.0.1:9100) and pushes via the existing push_prom_samples
@@ -388,13 +395,46 @@ func main() {
 			cfg.Edge.AccessKey,
 			cfg.Edge.SecretKey,
 		)
+		var pluginFetcher edgeplugins.ConfigFetcher = tunnelFetcher
+		if k8sInfo == nil {
+			for i, p := range registered {
+				if p.Name() == edgeplugintraces.Name {
+					bridges := edgeplugintraces.WithDockerBridges(pluginFetcher, p, pluginLog)
+					pluginFetcher, registered[i] = bridges, bridges
+					break
+				}
+			}
+		}
 		supervisor := edgeplugins.NewSupervisor(edgeplugins.SupervisorOpts{
-			Fetcher: tunnelFetcher,
+			Fetcher: pluginFetcher,
 			Log:     pluginLog,
 		})
 		for _, p := range registered {
 			supervisor.Register(p)
 		}
+		client.RegisterHandler(tunnel.MethodGetApplicationReceiver, func(ctx context.Context, _ tunnel.Session, _ string, body []byte) ([]byte, error) {
+			var request tunnel.ApplicationReceiverRequest
+			if err := json.Unmarshal(body, &request); err != nil {
+				return nil, fmt.Errorf("decode application receiver request: %w", err)
+			}
+			for _, health := range supervisor.HealthSnapshots() {
+				if health.Name != edgeplugintraces.Name || health.State != edgeplugins.StateRunning {
+					continue
+				}
+				var receiver tunnel.ApplicationReceiverResponse
+				var err error
+				if autoAPM != nil && request.InstanceID != "" {
+					receiver, err = autoAPM.ApplicationReceiver(ctx, filepath.Join(pluginWorkDir, edgeplugintraces.Name, "otelcol.yaml"), request)
+				} else {
+					receiver, err = edgeplugintraces.ApplicationReceiver(ctx, filepath.Join(pluginWorkDir, edgeplugintraces.Name, "otelcol.yaml"), request)
+				}
+				if err != nil {
+					return nil, err
+				}
+				return json.Marshal(receiver)
+			}
+			return json.Marshal(tunnel.ApplicationReceiverResponse{Reason: "receiver_unavailable"})
+		})
 		agent.SetPluginHealthFn(func() []tunnel.PluginHealthWire {
 			snaps := supervisor.HealthSnapshots()
 			out := make([]tunnel.PluginHealthWire, 0, len(snaps))
@@ -540,27 +580,28 @@ type k8sEnrollResponse struct {
 }
 
 type k8sTelemetryConfig struct {
-	ClusterNodeID          uint64 `json:"cluster_node_id"`
-	ClusterID              uint64 `json:"cluster_id"`
-	AccessKey              string `json:"access_key"`
-	SecretKey              string `json:"secret_key"`
-	ManagerPublicURL       string `json:"manager_public_url,omitempty"`
-	TracesEndpoint         string `json:"traces_endpoint,omitempty"`
-	TracesAuthMode         string `json:"traces_auth_mode,omitempty"`
-	TracesBasicUser        string `json:"traces_basic_user,omitempty"`
-	TracesBasicPass        string `json:"traces_basic_pass,omitempty"`
-	TracesTLSInsecure      bool   `json:"traces_tls_insecure,omitempty"`
-	LogsEndpoint           string `json:"logs_endpoint,omitempty"`
-	LogsAuthMode           string `json:"logs_auth_mode,omitempty"`
-	LogsBasicUser          string `json:"logs_basic_user,omitempty"`
-	LogsBasicPass          string `json:"logs_basic_pass,omitempty"`
-	LogsTLSInsecure        bool   `json:"logs_tls_insecure,omitempty"`
-	RemoteWriteEndpoint    string `json:"remote_write_endpoint,omitempty"`
-	RemoteWriteBearer      string `json:"remote_write_bearer,omitempty"`
-	RemoteWriteBasicUser   string `json:"remote_write_basic_user,omitempty"`
-	RemoteWriteBasicPass   string `json:"remote_write_basic_pass,omitempty"`
-	RemoteWriteTLSInsecure bool   `json:"remote_write_tls_insecure,omitempty"`
-	RemoteWriteTLSCAPEM    string `json:"remote_write_tls_ca_pem,omitempty"`
+	AppMetricsScope        autoapm.MetricsScope `json:"app_metrics_scope"`
+	ClusterNodeID          uint64               `json:"cluster_node_id"`
+	ClusterID              uint64               `json:"cluster_id"`
+	AccessKey              string               `json:"access_key"`
+	SecretKey              string               `json:"secret_key"`
+	ManagerPublicURL       string               `json:"manager_public_url,omitempty"`
+	TracesEndpoint         string               `json:"traces_endpoint,omitempty"`
+	TracesAuthMode         string               `json:"traces_auth_mode,omitempty"`
+	TracesBasicUser        string               `json:"traces_basic_user,omitempty"`
+	TracesBasicPass        string               `json:"traces_basic_pass,omitempty"`
+	TracesTLSInsecure      bool                 `json:"traces_tls_insecure,omitempty"`
+	LogsEndpoint           string               `json:"logs_endpoint,omitempty"`
+	LogsAuthMode           string               `json:"logs_auth_mode,omitempty"`
+	LogsBasicUser          string               `json:"logs_basic_user,omitempty"`
+	LogsBasicPass          string               `json:"logs_basic_pass,omitempty"`
+	LogsTLSInsecure        bool                 `json:"logs_tls_insecure,omitempty"`
+	RemoteWriteEndpoint    string               `json:"remote_write_endpoint,omitempty"`
+	RemoteWriteBearer      string               `json:"remote_write_bearer,omitempty"`
+	RemoteWriteBasicUser   string               `json:"remote_write_basic_user,omitempty"`
+	RemoteWriteBasicPass   string               `json:"remote_write_basic_pass,omitempty"`
+	RemoteWriteTLSInsecure bool                 `json:"remote_write_tls_insecure,omitempty"`
+	RemoteWriteTLSCAPEM    string               `json:"remote_write_tls_ca_pem,omitempty"`
 }
 
 func ensureK8sEnrollment(ctx context.Context, cfg *config.Config, log *slog.Logger) (*tunnel.KubernetesInfo, error) {
